@@ -124,6 +124,10 @@
     .tipo-badge {
       display: inline-block; padding: 3px 6px; border-radius: 4px; font-size: 9px; font-weight: bold; margin-top: 4px; border: 1px solid transparent; text-transform: uppercase;
     }
+
+    #control {
+      text-transform: uppercase;
+    }
   </style>
 </head>
 <body>
@@ -1100,6 +1104,56 @@
         })
         .guardarReporteMuestras(payload);
     }
+
+    // Selección de los elementos
+    const inputControl = document.getElementById('control'); // Asegúrate que el ID sea 'control'
+    const inputProducto = document.getElementById('producto'); // Asegúrate que el ID sea 'producto'
+
+    // 1. Reglas para el campo CONTROL
+    inputControl.addEventListener('input', function(e) {
+      let value = this.value;
+
+      // Convertir a mayúsculas automáticamente
+      value = value.toUpperCase();
+
+      // Eliminar espacios en blanco
+      value = value.replace(/\s+/g, '');
+
+      // Validar que el primer carácter sea una letra
+      if (value.length > 0 && !/[A-Z]/.test(value.charAt(0))) {
+        value = ''; // Si no empieza con letra, borramos para obligar el cumplimiento
+        alert("El campo Control debe iniciar con una letra.");
+      }
+
+      this.value = value;
+    });
+
+    // 2. Reglas para el campo PRODUCTO
+    inputProducto.addEventListener('input', function(e) {
+      let value = this.value;
+
+      // Validar que el primer carácter sea una letra
+      if (value.length > 0 && !/[a-zA-ZáéíóúÁÉÍÓÚñÑ]/.test(value.charAt(0))) {
+        value = '';
+        alert("El campo Producto debe iniciar con una letra.");
+      }
+
+      // No permitir dobles espacios
+      value = value.replace(/\s\s+/g, ' ');
+
+      // Tipo oración (Mayúscula inicial, el resto minúsculas si prefieres, 
+      // o simplemente asegurar la primera)
+      if (value.length > 0) {
+        value = value.charAt(0).toUpperCase() + value.slice(1);
+      }
+
+      this.value = value;
+    });
+
+    // Eliminar espacios al final cuando el usuario termine de escribir
+    inputProducto.addEventListener('blur', function() {
+      this.value = this.value.trim();
+    });
   </script>
 </body>
 </html>
