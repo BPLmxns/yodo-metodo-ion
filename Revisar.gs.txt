@@ -1,0 +1,201 @@
+// ====================================================================
+// Revisar.gs (Ejecutado nativamente en el entorno Web App)
+// ====================================================================
+
+// --- 🔍 CONSULTAS LOCALES (Lectura rápida nativa) ---
+
+/**
+ * Abre el panel de revisión local (para pruebas o uso desde Sheets)
+ */
+function abrirRevisarRegistros() {
+  const template = HtmlService.createTemplateFromFile('form_RevisarRegistros');
+  template.equipoTarget = 'MFPH-006'; 
+  SpreadsheetApp.getUi().showModalDialog(template.evaluate().setWidth(750).setHeight(750), ' ');
+}
+
+// ---------------- Segmento 1: Verificaciones ----------------
+function obtenerVerificacionesPendientes(equipoTarget) {
+  const resultado = { conforme: [], noConforme: [] };
+  if (equipoTarget && equipoTarget !== "MFPH-006") return resultado;
+
+  try {
+    const ss = SpreadsheetApp.openById(CONFIG.EQUIPO_PH.ID);
+    const hoja = ss.getSheetByName(CONFIG.EQUIPO_PH.HOJAS.VERIFICACION);
+    if (!hoja) return resultado;
+
+    const lastRow = hoja.getLastRow();
+    if (lastRow < 6) return resultado; 
+
+    // Extraemos desde la fila 6, columnas A a J
+    const datos = hoja.getRange(6, 1, lastRow - 5, 10).getValues();
+
+    datos.forEach(fila => {
+      const revisado = fila[8]; // Columna I
+
+      if (!revisado || revisado === "") {
+        let fechaHora = fila[0];
+        if (fechaHora instanceof Date) {
+          fechaHora = Utilities.formatDate(fechaHora, Session.getScriptTimeZone(), 'yyyy-MM-dd - HH:mm');
+        }
+        
+        const diferenciaMv = fila[5]; // Col F
+        const conformidad = fila[6];  // Col G
+        const responsable = fila[7];  // Col H
+
+        const registro = [fechaHora, diferenciaMv, conformidad, responsable];
+        
+        if (conformidad === 'CONFORME' || conformidad === 'Conforme') resultado.conforme.push(registro);
+        else resultado.noConforme.push(registro);
+      }
+    });
+  } catch (e) {
+    throw new Error("Error leyendo verificaciones: " + e.message);
+  }
+  return resultado;
+}
+
+// ---------------- Segmento 2: Registro de Uso ----------------
+function obtenerUsosPendientes(equipoTarget) {
+  const pendientes = [];
+  if (equipoTarget && equipoTarget !== "MFPH-006") return pendientes;
+
+  try {
+    const ss = SpreadsheetApp.openById(CONFIG.EQUIPO_PH.ID);
+    const hoja = ss.getSheetByName(CONFIG.EQUIPO_PH.HOJAS.USO);
+    if (!hoja) return pendientes;
+
+    const lastRow = hoja.getLastRow();
+    if (lastRow < 7) return pendientes; 
+
+    const datos = hoja.getRange(7, 1, lastRow - 6, 9).getValues();
+
+    datos.forEach(fila => {
+      const revisado = fila[7]; // Columna H
+
+      if (!revisado || revisado === "") {
+        let fechaHora = fila[0];
+        if (fechaHora instanceof Date) {
+          fechaHora = Utilities.formatDate(fechaHora, Session.getScriptTimeZone(), 'yyyy-MM-dd - HH:mm');
+        }
+        
+        const control = fila[1];      
+        const producto = fila[2];     
+        const verificacion = fila[3]; 
+        const drenado = fila[4];      
+        const limpieza = fila[5];     
+
+        pendientes.push([fechaHora, control, producto, verificacion, drenado, limpieza]);
+      }
+    });
+  } catch (e) {
+    throw new Error("Error leyendo usos: " + e.message);
+  }
+  return pendientes;
+}
+
+// ---------------- Segmento 3: Seguimientos Mensuales ----------------
+function obtenerSeguimientoPendientes(equipoTarget) {
+  const pendientes = [];
+  if (equipoTarget && equipoTarget !== "MFPH-006") return pendientes;
+
+  try {
+    const ss = SpreadsheetApp.openById(CONFIG.EQUIPO_PH.ID);
+    const hoja = ss.getSheetByName(CONFIG.EQUIPO_PH.HOJAS.SEGUIMIENTO);
+    if (!hoja) return pendientes;
+
+    const lastRow = hoja.getLastRow();
+    if (lastRow < 6) return pendientes; 
+
+    const datos = hoja.getRange(6, 1, lastRow - 5, 8).getValues();
+
+    datos.forEach(fila => {
+      const revisado = fila[6]; // Columna G
+
+      if (!revisado || revisado === "") {
+        let fecha = fila[0];
+        if (fecha instanceof Date) {
+          fecha = Utilities.formatDate(fecha, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+        }
+        
+        const estado = fila[1];       
+        const aspectos = fila[2];     
+        const observaciones = fila[3];
+
+        pendientes.push(["MFPH-006", fecha, estado, aspectos, observaciones]);
+      }
+    });
+  } catch (e) {
+    throw new Error("Error leyendo seguimientos: " + e.message);
+  }
+  return pendientes;
+}
+
+
+// --- 🔐 LÓGICA DIRECTA DE ESCRITURA (Se ejecuta nativamente sin el puente HTTP) ---
+
+function firmarRegistros(equipoTarget) {
+  if (equipoTarget && equipoTarget !== "MFPH-006") {
+    throw new Error("No se encontraron registros pendientes para este equipo.");
+  }
+
+  // Atrapa directamente al Líder logueado en la página Web App
+  const emailLider = Session.getActiveUser().getEmail(); 
+  const hoyCorto = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd"); 
+  
+  try {
+    const ss = SpreadsheetApp.openById(CONFIG.EQUIPO_PH.ID);
+
+    // 1. Firmar hoja 'Verificación' (Col I y J, desde fila 6)
+    const hojaVerif = ss.getSheetByName(CONFIG.EQUIPO_PH.HOJAS.VERIFICACION);
+    if (hojaVerif && hojaVerif.getLastRow() >= 6) {
+      const rRev = hojaVerif.getRange(6, 9, hojaVerif.getLastRow() - 5, 2); 
+      const valRev = rRev.getValues();
+      let actVerif = false;
+      for (let i = 0; i < valRev.length; i++) {
+        if (!valRev[i][0] || String(valRev[i][0]).trim() === '') { 
+          valRev[i][0] = hoyCorto; 
+          valRev[i][1] = emailLider; 
+          actVerif = true; 
+        }
+      }
+      if (actVerif) rRev.setValues(valRev);
+    }
+
+    // 2. Firmar hoja 'Registro de Uso' (Col H e I, desde fila 7)
+    const hojaUso = ss.getSheetByName(CONFIG.EQUIPO_PH.HOJAS.USO);
+    if (hojaUso && hojaUso.getLastRow() >= 7) {
+      const rUso = hojaUso.getRange(7, 8, hojaUso.getLastRow() - 6, 2); 
+      const valUso = rUso.getValues();
+      let actUso = false;
+      for (let i = 0; i < valUso.length; i++) {
+        if (!valUso[i][0] || String(valUso[i][0]).trim() === '') { 
+          valUso[i][0] = hoyCorto; 
+          valUso[i][1] = emailLider; 
+          actUso = true; 
+        }
+      }
+      if (actUso) rUso.setValues(valUso);
+    }
+
+    // 3. Firmar hoja 'Seguimiento' (Col G y H, desde fila 6)
+    const hojaSeg = ss.getSheetByName(CONFIG.EQUIPO_PH.HOJAS.SEGUIMIENTO);
+    if (hojaSeg && hojaSeg.getLastRow() >= 6) {
+      const rSeg = hojaSeg.getRange(6, 7, hojaSeg.getLastRow() - 5, 2); 
+      const valSeg = rSeg.getValues();
+      let actSeg = false;
+      for (let i = 0; i < valSeg.length; i++) {
+        if (!valSeg[i][0] || String(valSeg[i][0]).trim() === '') { 
+          valSeg[i][0] = hoyCorto; 
+          valSeg[i][1] = emailLider; 
+          actSeg = true; 
+        }
+      }
+      if (actSeg) rSeg.setValues(valSeg);
+    }
+
+    return "Verificaciones, Registros de Uso y Seguimientos Mensuales firmados exitosamente para el equipo " + (equipoTarget || 'MFPH-006') + ".";
+
+  } catch (error) {
+    throw new Error("Ocurrió un error al intentar estampar la firma: " + error.message);
+  }
+}

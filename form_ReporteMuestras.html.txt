@@ -1,0 +1,1105 @@
+<!-- form_ReporteMuestras.html -->
+
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --lima: #afcc46; --cian: #00abe6; --azul-oscuro: #0a4079;
+      --gris: #6b7280; --fondo: #f4f7f9; --error: #ef4444; --success: #10b981;
+    }
+    body { font-family: 'Segoe UI', sans-serif; background: var(--fondo); margin: 0; padding: 0; color: #333; }
+    .modal-header { background: var(--azul-oscuro); color: white; padding: 15px; text-align: center; border-bottom: 4px solid var(--lima); position: sticky; top: 0; z-index: 10; }
+    .modal-header h2 { margin: 0; font-size: 16px; text-transform: uppercase; letter-spacing: 1px; }
+
+    .stepper { display: flex; justify-content: center; padding: 15px 0; background: white; border-bottom: 1px solid #e1e5eb; }
+    .step { display: flex; align-items: center; font-size: 11px; font-weight: 700; color: var(--gris); text-transform: uppercase; cursor: default; }
+    .step.active { color: var(--azul-oscuro); }
+    .step-number { display: flex; justify-content: center; align-items: center; width: 22px; height: 22px; border-radius: 50%; background: #e2e8f0; color: var(--gris); margin-right: 8px; }
+    .step.active .step-number { background: var(--cian); color: white; }
+    .step-divider { width: 30px; height: 2px; background: #e2e8f0; margin: 0 15px; }
+
+    .content { padding: 15px; padding-bottom: 80px; }
+    .segmento { display: none; }
+    .segmento.active { display: block; animation: fadeIn 0.4s; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+    .card { background: white; border-radius: 8px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #e1e5eb; }
+    .card-title { font-size: 10px; font-weight: 800; color: var(--gris); text-transform: uppercase; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+    .card-title::before { content: ""; width: 3px; height: 10px; background: var(--cian); border-radius: 5px; }
+
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+    .grid-4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 10px; }
+    .field { margin-bottom: 10px; }
+    label { display: block; font-size: 11px; font-weight: 700; color: var(--azul-oscuro); margin-bottom: 4px; }
+    .radio-label { display: inline-flex; align-items: center; font-weight: 600; color: #475569; font-size: 12px; cursor: pointer; gap: 4px; margin-right: 15px; }
+
+    input, select, textarea { width: 100%; padding: 8px 10px; border: 1px solid #ced4da; border-radius: 5px; font-size: 12px; box-sizing: border-box; transition: all 0.2s; font-family: inherit;}
+    input:focus, select:focus, textarea:focus { border-color: var(--cian); outline: none; box-shadow: 0 0 0 3px rgba(0,171,230,0.1); }
+    input[type="radio"], input[type="checkbox"] { accent-color: var(--azul-oscuro); cursor: pointer; margin: 0; width: 16px; height: 16px;}
+    
+    .read-only { background-color: #f1f5f9 !important; color: #475569; font-weight: 600; cursor: not-allowed; }
+    .invalid { border: 1.5px solid var(--error) !important; background-color: #fff5f5 !important; }
+    .data-box { background: #f8f9fa; border: 1px solid #ced4da; padding: 10px; border-radius: 6px; text-align: center; }
+    .data-box span { display: block; font-size: 16px; font-weight: 800; color: var(--azul-oscuro); margin-top: 5px; }
+
+    /* ====== CUSTOM DROPDOWN ====== */
+    .dropdown-container { position: relative; width: 100%; }
+    .dropdown-container input { padding-right: 30px; cursor: text; font-weight:bold;}
+    .dropdown-chevron { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 10px; color: var(--azul-oscuro); pointer-events: none; }
+    .clear-btn { position: absolute; right: 24px; top: 50%; transform: translateY(-50%); font-size: 11px; color: var(--error); cursor: pointer; display: none; z-index: 5; background: white; border-radius: 50%; width: 16px; height: 16px; text-align: center; line-height: 16px; font-weight: bold; }
+    .clear-btn:hover { background: #fef2f2; transform: translateY(-50%) scale(1.1); }
+
+    .dropdown-list { display: none; position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid var(--cian); border-radius: 5px; margin-top: 4px; max-height: 180px; overflow-y: auto; z-index: 9999; text-align: left; }
+    .dropdown-list.show { display: block; }
+    .dropdown-option { padding: 10px 12px; font-size: 12px; cursor: pointer; border-bottom: 1px solid #f1f5f9; transition: background 0.2s; }
+    .dropdown-option:hover { background: #f4f7f9; color: var(--azul-oscuro); font-weight: 700; }
+    .no-results { padding: 10px 12px; font-size: 11px; color: var(--gris); font-style: italic; text-align: center; }
+
+    /* ====== TABLAS GENÉRICAS ====== */
+    .table-container { overflow: visible; margin-top: 10px; border: 1px solid #e1e5eb; border-radius: 6px; }
+    table { width: 100%; border-collapse: collapse; min-width: 800px; background: white; }
+    th { background: #f8f9fa; color: var(--azul-oscuro); padding: 10px; font-size: 11px; text-align: center; border-bottom: 2px solid #e1e5eb; font-weight: 700; }
+    td { padding: 8px; font-size: 11px; border-bottom: 1px solid #e1e5eb; text-align: center; vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    .td-input { width: 100%; font-size: 11px; padding: 6px; text-align: center;}
+    .text-left { text-align: left !important; }
+
+    /* ====== BADGE ====== */
+    .badge { width: 100%; padding: 4px; border-radius: 4px; text-align: center; font-weight: 800; font-size: 10px; text-transform: uppercase; border: 1px solid transparent; display:inline-block; box-sizing: border-box;}
+    .badge-conforme { background: #ecfdf5; color: #059669; border-color: #10b981; }
+    .badge-noconforme { background: #fef2f2; color: #dc2626; border-color: #ef4444; }
+    .badge-pendiente { background: #f1f5f9; color: var(--gris); border-color: #cbd5e1; }
+
+    /* ====== AJUSTES DE TABLA DE CURVA COMPACTA ====== */
+    .chart-container { position: relative; height: 215px; width: 100%; margin-top: 15px; }
+    .table-compact { min-width: 100% !important; width: 100%; } 
+    .table-compact th { padding: 10px 6px !important; font-size: 11px !important; }
+    .table-compact td { padding: 8px 6px !important; font-size: 12px !important; font-weight: 500;}
+
+    .limites-box { display: flex; gap: 10px; align-items: center; justify-content:center; margin-top: 6px; }
+    .limite-item { display: flex; flex-direction: column; width: 80px; }
+    .limite-item small { font-size: 9px; color: var(--azul-oscuro); font-weight: bold; margin-bottom:2px;}
+
+    /* ====== MODALES ====== */
+    #modal-alerta-rutina, #modal-final { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%; box-sizing: border-box; background-color: rgba(255, 255, 255, 0.96); z-index: 9999; padding: 30px 20px; flex-direction: column; justify-content: center; align-items: center; backdrop-filter: blur(2px); }
+    .modal-box { background: white; border-top: 5px solid var(--lima); border-radius: 10px; padding: 25px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); width: 400px; text-align: center; }
+    .title-q { font-weight: 800; color: var(--azul-oscuro); display: block; margin-bottom: 12px; font-size: 13px;}
+    .radio-group { display: flex; justify-content: center; gap: 30px; background: var(--fondo); padding: 15px; border-radius: 6px; border: 1px solid #e1e5eb;}
+
+    #overlay-submit {
+      display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(4px); z-index: 10000;
+      flex-direction: column; justify-content: center; align-items: center; text-align: center;
+      animation: fadeInOverlay 0.3s ease-in-out;
+    }
+    @keyframes fadeInOverlay { from { opacity: 0; } to { opacity: 1; } }
+    .submit-spinner { width: 55px; height: 55px; border-radius: 50%; border: 5px solid #e1e5eb; border-top-color: var(--azul-oscuro); border-bottom-color: var(--lima); animation: spin 1s linear infinite; margin-bottom: 20px; }
+    .submit-icon-success { display: none; font-size: 65px; margin-bottom: 10px; animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+    @keyframes popIn { 0% { transform: scale(0.3); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+    .submit-title { font-size: 18px; font-weight: 800; color: var(--azul-oscuro); margin: 0 0 8px 0; transition: color 0.3s;}
+    .submit-text { font-size: 13px; color: var(--gris); margin: 0; font-weight: 500;}
+
+    /* ====== FOOTER ====== */
+    .footer { display: flex; justify-content: space-between; padding: 15px; background: white; border-top: 1px solid #e1e5eb; position: fixed; bottom: 0; width: 100%; box-sizing: border-box; z-index: 10;}
+    .footer-left, .footer-right { display: flex; gap: 10px; }
+    button { padding: 10px 20px; border-radius: 5px; font-weight: 700; cursor: pointer; font-size: 12px; transition: 0.2s; border: none; display: flex; align-items: center; justify-content: center; gap: 8px;}
+    .btn-cancel { background: transparent; border: 1px solid var(--gris); color: var(--gris); }
+    .btn-cancel:hover { background: #f1f5f9; }
+    .btn-next { background: var(--azul-oscuro); color: white; }
+    .btn-next:hover { background: #0d4d8d; }
+
+    #loader { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(255, 255, 255, 0.9); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 1000; }
+    .spinner { width: 40px; height: 40px; border-radius: 50%; border: 4px solid transparent; border-top-color: var(--azul-oscuro); border-right-color: var(--lima); border-bottom-color: var(--cian); border-left-color: var(--gris); animation: spin 0.9s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    #toast-container { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 2000; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+    .toast { padding: 10px 20px; border-radius: 6px; color: white; font-size: 12px; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,0.15); opacity: 0; transform: translateY(-20px); transition: all 0.3s ease-out; display: flex; align-items: center; gap: 8px; }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast-error { background-color: var(--error); }
+    .toast-success { background-color: var(--azul-oscuro); border-bottom: 3px solid var(--lima); }
+
+    .tipo-badge {
+      display: inline-block; padding: 3px 6px; border-radius: 4px; font-size: 9px; font-weight: bold; margin-top: 4px; border: 1px solid transparent; text-transform: uppercase;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="toast-container"></div>
+  <div id="loader">
+    <div class="spinner"></div>
+    <p style="margin-top:15px; font-size:12px; font-weight:700; color:var(--azul-oscuro)">Cargando Curvas, Muestras e Inventarios...</p>
+  </div>
+
+  <div id="modal-alerta-rutina">
+    <div class="modal-box" style="border-top-color: var(--error);">
+      <div style="font-size: 40px; margin-bottom: 10px;">⚠️</div>
+      <h2 style="color: var(--error); margin-bottom: 10px; text-transform: uppercase; font-size:15px;">Muestra ya analizada</h2>
+      <p style="font-size: 13px; color: var(--gris); margin-bottom: 25px; line-height: 1.5;">
+        La muestra <strong id="lblMuestraRutina" style="color: var(--azul-oscuro);"></strong> ya cuenta con un ensayo de <strong>Rutina</strong> registrado en el sistema.<br><br>
+        Por norma de Aseguramiento de Calidad, un re-análisis de esta muestra debe realizarse seleccionando el tipo de muestra <strong>"Verificación"</strong>.
+      </p>
+      <button class="btn-cancel" style="width: 100%; justify-content: center; font-size: 13px;" onclick="document.getElementById('modal-alerta-rutina').style.display='none'">ENTENDIDO</button>
+    </div>
+  </div>
+
+  <div id="overlay-submit">
+    <div class="submit-spinner" id="submit-spinner"></div>
+    <div class="submit-icon-success" id="submit-icon-success">✅</div>
+    <h3 class="submit-title" id="submit-title">Guardando reporte...</h3>
+    <p class="submit-text" id="submit-text">Por favor, no cierre la ventana.</p>
+  </div>
+
+  <div id="modal-final">
+    <div class="modal-box">
+      <div style="font-size: 40px; margin-bottom: 10px;">📋</div>
+      <h2 style="color: var(--azul-oscuro); margin-bottom: 5px;">Registro de Uso</h2>
+      <p style="font-size: 12px; color: var(--gris); margin-bottom: 25px;">Verifique las condiciones finales del pH-metro tras su uso.</p>
+      
+      <div style="text-align: left; margin-bottom: 20px;">
+        <label class="title-q">¿El electrodo ISE quedó correctamente drenado?</label>
+        <div class="radio-group">
+          <label class="radio-label"><input type="radio" name="opt_drenado" value="Cumple"> Sí</label>
+          <label class="radio-label"><input type="radio" name="opt_drenado" value="No cumple"> No</label>
+        </div>
+      </div>
+
+      <div style="text-align: left; margin-bottom: 30px;">
+        <label class="title-q">¿El equipo quedó limpio y acondicionado?</label>
+        <div class="radio-group">
+          <label class="radio-label"><input type="radio" name="opt_limpieza" value="Cumple"> Sí</label>
+          <label class="radio-label"><input type="radio" name="opt_limpieza" value="No cumple"> No</label>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 10px; justify-content: center;">
+        <button class="btn-cancel" onclick="document.getElementById('modal-final').style.display='none'">CANCELAR</button>
+        <button class="btn-next" id="btnProcesarFinal" onclick="enviarAlServidor()">
+          <span>GUARDAR TODO</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-header"><h2>Reporte de Muestras</h2></div>
+
+  <div class="stepper">
+    <div class="step active" id="step1"><div class="step-number">1</div> Batch</div>
+    <div class="step-divider"></div>
+    <div class="step" id="step2"><div class="step-number">2</div> Prep.</div>
+    <div class="step-divider"></div>
+    <div class="step" id="step3"><div class="step-number">3</div> Lectura</div>
+  </div>
+
+  <!-- ================= SEGMENTO I: BATCH ================= -->
+  <div class="content segmento active" id="segmento1">
+    <div class="card">
+      <div class="card-title">Configuración del Batch</div>
+      <div class="grid">
+        <div class="field"><label>Fecha y Hora</label><input type="text" id="fechaHora" class="read-only text-center" readonly></div>
+        <div class="field">
+          <label>Número de muestras (x2 Réplicas automáticas)</label>
+          <input type="number" id="numMuestras" min="1" step="1" placeholder="Ej: 5" oninput="ajustarTablaMuestras()">
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Detalle de Muestras</div>
+      <div class="table-container">
+        <table style="min-width: 800px;">
+          <thead>
+            <tr>
+              <th style="width: 5%;">#</th>
+              <th style="width: 15%;">Tipo de Muestra</th>
+              <th style="width: 25%;">Control / Código</th>
+              <th style="width: 30%;">Producto</th>
+              <th style="width: 25%;">Límites de Especificación</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyMuestras">
+            <tr><td colspan="5" style="padding:20px; color:var(--gris); font-style:italic;">Digite el número de muestras.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= SEGMENTO II: PREPARACIÓN ================= -->
+  <div class="content segmento" id="segmento2">
+    <div class="card">
+      <div class="card-title">Resumen del Batch</div>
+      <div class="grid-3">
+        <div class="field"><label>Fecha y Hora</label><input type="text" id="resFecha" class="read-only text-center" readonly></div>
+        <div class="field"><label>Distribución del Lote</label><input type="text" id="resTipo" class="read-only text-center" readonly></div>
+        <div class="field"><label>Total de Réplicas</label><input type="text" id="resTotal" class="read-only" readonly style="font-weight:bold; color:var(--azul-oscuro); text-align:center;"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Preparación de Muestras (Duplicados)</div>
+      <p style="font-size:10px; color:var(--gris); margin-top:-5px; margin-bottom:10px;">Indique el peso exacto en la balanza y el instrumental asociado a CADA réplica.</p>
+      <div class="table-container">
+        <table style="min-width: 850px;">
+          <thead>
+            <tr>
+              <th style="width: 9%;">Control</th>
+              <th style="width: 20%;">Producto</th>
+              <th style="width: 4%;">Rep</th>
+              <th style="width: 15%;">Peso [g] / Balanza</th>
+              <th style="width: 17%;">Balón Muestra<br><small style="font-size:9px; color:var(--gris);">(100 mL)</small></th>
+              <th style="width: 17%;">Pipeta Vol.<br><small style="font-size:9px; color:var(--gris);">(10 mL)</small></th>
+              <th style="width: 18%;">Balón Dilución<br><small style="font-size:9px; color:var(--gris);">(100 mL)</small></th>
+            </tr>
+          </thead>
+          <tbody id="tbodyPrep"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= SEGMENTO III: LECTURA ================= -->
+  <div class="content segmento" id="segmento3">
+    <div class="card">
+      <div class="card-title">Equipo de Medición (pH-metro)</div>
+      <div class="grid">
+        <div class="field">
+          <label>Código pH-metro</label>
+          <select id="eqPh"></select>
+        </div>
+        <div class="field">
+          <label>Área</label>
+          <input type="text" id="eqArea" class="read-only text-center" readonly>
+        </div>
+      </div>
+      <div class="field" style="margin-top:5px;">
+        <label>Verificación Diaria (Hoy)</label>
+        <input type="text" id="eqVerificacion" class="read-only text-center" readonly style="font-weight:800; color:var(--success);" value="CONFORME">
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Curva de Calibración</div>
+      <div class="field">
+        <label>Seleccione Curva del Día (Conforme)</label>
+        <select id="selCurva" onchange="renderizarCurva()"><option value="">Seleccionando...</option></select>
+      </div>
+      <div id="curvaDetails" style="display:none; margin-top:15px; border-top:1px dashed #ced4da; padding-top:10px;">
+        <div class="grid" style="grid-template-columns: 0.45fr 0.55fr; gap: 15px;">
+          <div class="table-container" style="margin-top:0; min-width: unset;">
+            <table class="table-compact">
+              <thead><tr><th style="width: 15%;">Nivel</th><th style="width: 25%;">Conc. [ppm]</th><th style="width: 25%;">mV</th><th style="width: 35%;">Log(Conc.)</th></tr></thead>
+              <tbody id="tbodyCurvaDet"></tbody>
+            </table>
+          </div>
+          <div>
+            <div class="grid-3" style="margin-bottom:10px;">
+              <div class="data-box" style="padding:5px;"><small>Pendiente (a)</small><span id="res_a" style="font-size:13px;">-</span></div>
+              <div class="data-box" style="padding:5px;"><small>Intercepto (b)</small><span id="res_b" style="font-size:13px;">-</span></div>
+              <div class="data-box" style="padding:5px;"><small>R²</small><span id="res_r2" style="font-size:13px;">-</span></div>
+            </div>
+            <div style="font-size:10px; text-align:center; color:var(--gris); font-style:italic;">Ecuación: <strong style="color:var(--azul-oscuro);" id="ecuacion">-</strong></div>
+            <div class="chart-container"><canvas id="graficaCurvaRes"></canvas></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Resultados de Muestras y Estimación HorRat</div>
+      <p style="font-size:10px; color:var(--gris); margin-top:-5px; margin-bottom:10px;">El HorRat evalúa la repetibilidad (≤ 1.3). La Especificación evalúa el promedio de las réplicas contra los límites.</p>
+      <div class="table-container">
+        <table style="min-width: 1000px;">
+          <thead>
+            <tr>
+              <th style="width: 8%;">Control</th>
+              <th style="width: 17%;">Producto</th>
+              <th style="width: 4%;">Rep</th>
+              <th style="width: 10%;">Lote ISA</th>
+              <th style="width: 8%;">[mV]</th>
+              <th style="width: 8%;">[mg/kg]</th>
+              <th style="width: 11%;">Promedio<br><small style="font-size:9px; color:var(--gris);">(mg/kg)</small></th>
+              <th style="width: 7%;">RSD(r) %</th>
+              <th style="width: 7%;">PRSD(R) %</th>
+              <th style="width: 9%;">HorRat(r)<br><span style="font-size:8px; color:var(--gris); font-weight:normal; text-transform:none;">RSD(r) / PRSD(R)</span></th>
+              <th style="width: 11%;">Espec. / Conf.</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyResultados"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div class="footer-left">
+      <button type="button" class="btn-cancel" id="btnCerrar" onclick="google.script.host.close()">CANCELAR</button>
+      <button type="button" class="btn-cancel" id="btnAtras1" style="display:none;" onclick="irAtras(1)">← ATRÁS</button>
+      <button type="button" class="btn-cancel" id="btnAtras2" style="display:none;" onclick="irAtras(2)">← ATRÁS</button>
+    </div>
+    <div class="footer-right">
+      <button type="button" class="btn-next" id="btnSiguienteS1" onclick="irSiguiente1()"><span>SIGUIENTE</span> →</button>
+      <button type="button" class="btn-next" id="btnSiguienteS2" style="display:none;" onclick="irSiguiente2()"><span>SIGUIENTE</span> →</button>
+      <button type="button" class="btn-next" id="btnFinalizar" style="display:none;" onclick="abrirModalUso()">FINALIZAR</button>
+    </div>
+  </div>
+
+  <script>
+    let dbMuestras = [], dbVerificacion = [];
+    let dataBalanzas = [], dataPipetas10 = [], dataBalones100 = [], dataEquiposPh = [];
+    let mapReplicas = {}, lotesISA = [], curvasHoy = [];
+    let controlesRutina = []; 
+    
+    let numFilas = 0;
+    let muestrasBatch = []; 
+    let chartInstance = null;
+    let curvaActiva = null; 
+
+    let procesosCargados = 0;
+    let procesosTotales = 3;
+    let datosFinales = {};
+
+    window.onload = () => {
+      const ahora = new Date();
+      document.getElementById('fechaHora').value = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, '0')}-${String(ahora.getDate()).padStart(2, '0')} - ${String(ahora.getHours()).padStart(2, '0')}:${String(ahora.getMinutes()).padStart(2, '0')}`;
+      
+      google.script.run.withSuccessHandler(res => consolidarCarga("muestras", res)).withFailureHandler(errorCarga).getMuestrasData();
+      google.script.run.withSuccessHandler(res => consolidarCarga("inventario", res)).withFailureHandler(errorCarga).getInventarioData();
+      google.script.run.withSuccessHandler(res => consolidarCarga("curvas", res)).withFailureHandler(errorCarga).getCurvasData();
+    };
+
+    function errorCarga(err) {
+      document.getElementById('loader').style.display='none';
+      mostrarToast(err.message, "error");
+    }
+
+    function consolidarCarga(tipo, data) {
+      datosFinales[tipo] = data;
+      procesosCargados++;
+      if (procesosCargados === procesosTotales) {
+        const consolidado = {
+          muestras: datosFinales.muestras.muestras,
+          muestrasVerificacion: datosFinales.muestras.muestrasVerificacion,
+          mapReplicas: datosFinales.muestras.mapReplicas,
+          controlesRutina: datosFinales.muestras.controlesRutina, 
+          balanzas: datosFinales.inventario.balanzas,
+          pipetas10mL: datosFinales.inventario.pipetas10mL,
+          balones100mL: datosFinales.inventario.balones100mL,
+          lotesISA: datosFinales.inventario.lotesISA,
+          curvasHoy: datosFinales.curvas
+        };
+        inicializarFormulario(consolidado);
+      }
+    }
+
+    function mostrarToast(msg, tipo) {
+      const t = document.getElementById('toast-container');
+      const d = document.createElement('div');
+      d.className = `toast ${tipo === 'error' ? 'toast-error' : 'toast-success'}`;
+      d.innerHTML = tipo === 'error' ? `⚠️ ${msg}` : `✅ ${msg}`;
+      t.appendChild(d);
+      setTimeout(() => d.classList.add('show'), 10);
+      setTimeout(() => { d.classList.remove('show'); setTimeout(() => d.remove(), 300); }, 3000);
+    }
+
+    function inicializarFormulario(datos) {
+      dbMuestras = datos.muestras; 
+      dbVerificacion = datos.muestrasVerificacion;
+      dataBalanzas = datos.balanzas; dataPipetas10 = datos.pipetas10mL; dataBalones100 = datos.balones100mL;
+      mapReplicas = datos.mapReplicas; lotesISA = datos.lotesISA; curvasHoy = datos.curvasHoy;
+      controlesRutina = datos.controlesRutina; 
+
+      const selCurva = document.getElementById('selCurva');
+      selCurva.innerHTML = '<option value="">Seleccione curva...</option>';
+      curvasHoy.forEach(c => { selCurva.innerHTML += `<option value="${c.id}">${c.etiqueta}</option>`; });
+
+      const selEqPh = document.getElementById('eqPh');
+      dataEquiposPh = [{codigo: "MFPH-006", area: "Materias Primas"}];
+      dataEquiposPh.forEach(eq => { selEqPh.innerHTML += `<option value="${eq.codigo}">${eq.codigo}</option>`; });
+      document.getElementById('eqArea').value = dataEquiposPh[0].area;
+
+      document.getElementById('loader').style.display = 'none';
+      document.addEventListener('click', e => {
+        if (!e.target.closest('.dropdown-container')) document.querySelectorAll('.dropdown-list').forEach(l => l.classList.remove('show'));
+      });
+    }
+
+    // ================= PERSISTENCIA DE ESTADO =================
+    function guardarEstadoPrep() {
+      for (let i = 0; i < muestrasBatch.length; i++) {
+        const inp = (id) => { const el = document.getElementById(id); return el ? el.value : ""; };
+        muestrasBatch[i].pso = inp(`peso_p_${i}`); muestrasBatch[i].bal = inp(`balanza_p_${i}`);
+        muestrasBatch[i].bM = inp(`balonM_p_${i}`); muestrasBatch[i].pip = inp(`pipeta_p_${i}`); muestrasBatch[i].bD = inp(`balonD_p_${i}`);
+      }
+    }
+
+    function guardarEstadoLect() {
+      for (let i = 0; i < muestrasBatch.length; i++) {
+        const isa = document.getElementById(`isa_res_${i}`); if(isa) muestrasBatch[i].isa = isa.value;
+        const mv = document.getElementById(`mv_res_${i}`); if(mv) muestrasBatch[i].mv = mv.value;
+        const mg = document.getElementById(`mgkg_res_${i}`); if(mg) muestrasBatch[i].mgkg = mg.innerText;
+      }
+    }
+
+    function guardarEstadoTabla() {
+      for (let i = 1; i <= numFilas; i++) {
+        const tipoEl = document.getElementById(`tipo_${i}`);
+        if (!tipoEl) continue;
+
+        const tipoVal = tipoEl.value;
+        const usaCombo = (tipoVal === 'Rutina' || tipoVal === 'Verificación');
+        
+        const inf = document.getElementById(`inf_${i}`);
+        const sup = document.getElementById(`sup_${i}`);
+        const chk = document.getElementById(`na_${i}`).checked;
+
+        if (muestrasBatch[(i-1)*2]) {
+          muestrasBatch[(i-1)*2].inf = inf ? inf.value : "";
+          muestrasBatch[(i-1)*2].sup = sup ? sup.value : "";
+          muestrasBatch[(i-1)*2].na = chk;
+          muestrasBatch[(i-1)*2 + 1].inf = inf ? inf.value : "";
+          muestrasBatch[(i-1)*2 + 1].sup = sup ? sup.value : "";
+          muestrasBatch[(i-1)*2 + 1].na = chk;
+        }
+      }
+    }
+
+    // ================= FUNCIONES DEL DROPDOWN MEJORADO =================
+    function poblarComboGeneral(arr, listId, inputId, isObj=false, idxObj=null) {
+      const l = document.getElementById(listId); l.innerHTML = '';
+      if(arr.length===0) { l.innerHTML = '<div class="no-results">Sin datos</div>'; return; }
+      arr.forEach(i => {
+        let d = document.createElement('div'); d.className = 'dropdown-option'; d.innerText = i;
+        d.onclick = () => { 
+          document.getElementById(inputId).value = i; 
+          document.getElementById(inputId).classList.remove('invalid'); 
+          l.classList.remove('show'); 
+          const clearBtn = document.getElementById('clear_' + inputId);
+          if(clearBtn) clearBtn.style.display = 'block';
+          if(isObj) seleccionarControl(idxObj); 
+        };
+        l.appendChild(d);
+      });
+    }
+
+    function mostrarOpcionesGeneral(lId, iId) { 
+      document.getElementById(lId).classList.add('show'); 
+      filtrarOpcionesGeneral(lId, iId); 
+    }
+
+    function filtrarOpcionesGeneral(lId, iId) {
+      const v = document.getElementById(iId).value.toUpperCase();
+      const l = document.getElementById(lId);
+      const ops = l.getElementsByClassName('dropdown-option');
+      let vis=0;
+      for(let i=0; i<ops.length; i++) { 
+        if(ops[i].innerText.toUpperCase().indexOf(v)>-1) { ops[i].style.display=""; vis++; } 
+        else { ops[i].style.display="none"; }
+      }
+      let nr = l.querySelector('.no-results');
+      if(vis===0 && ops.length>0) { 
+        if(!nr) { nr=document.createElement('div'); nr.className='no-results'; nr.innerText='Sin coincidencias'; l.appendChild(nr); } 
+      } else if(nr && vis>0) { nr.remove(); }
+
+      const clearBtn = document.getElementById('clear_' + iId);
+      if(clearBtn) clearBtn.style.display = v ? 'block' : 'none';
+
+      const inputEl = document.getElementById(iId);
+      if(inputEl && l.classList.contains('show')) {
+        const rect = inputEl.getBoundingClientRect();
+        const windowHeight = window.innerHeight;
+        if (rect.bottom + 160 > windowHeight && rect.top > 160) {
+          l.style.top = 'auto'; l.style.bottom = '100%'; l.style.marginTop = '0'; l.style.marginBottom = '4px'; l.style.boxShadow = '0 -4px 12px rgba(0,0,0,0.15)';
+        } else {
+          l.style.top = '100%'; l.style.bottom = 'auto'; l.style.marginTop = '4px'; l.style.marginBottom = '0'; l.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+        }
+      }
+    }
+
+    function limpiarDropdownGeneral(listId, inputId, isObj=false, idxObj=null) {
+      const input = document.getElementById(inputId);
+      input.value = '';
+      input.focus();
+      filtrarOpcionesGeneral(listId, inputId);
+      if(isObj) seleccionarControl(idxObj); 
+    }
+
+    // ================= SEGMENTO I: BATCH =================
+    
+    function ajustarTablaMuestras() {
+      const val = parseInt(document.getElementById('numMuestras').value) || 0;
+      const tbody = document.getElementById('tbodyMuestras');
+      
+      if (numFilas === 0 && val > 0) tbody.innerHTML = ''; 
+      
+      if (val > numFilas) {
+        for (let i = numFilas + 1; i <= val; i++) {
+          const tr = document.createElement('tr'); tr.id = `row_${i}`; tr.innerHTML = crearFilaHTML(i);
+          tbody.appendChild(tr); 
+          cambiarTipoMuestraFila(i); 
+        }
+      } else if (val < numFilas && val >= 0) {
+        for (let i = numFilas; i > val; i--) { const tr = document.getElementById(`row_${i}`); if (tr) tr.remove(); }
+      }
+      
+      numFilas = val;
+      if (numFilas === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:var(--gris); font-style:italic;">Digite el número de muestras.</td></tr>';
+      }
+    }
+
+    function crearFilaHTML(idx) {
+      return `
+        <td style="font-weight:bold; color:var(--gris); text-align:center;">${idx}</td>
+        <td>
+          <select id="tipo_${idx}" class="td-input" style="font-weight:bold; cursor:pointer;" onchange="cambiarTipoMuestraFila(${idx})">
+            <option value="Rutina" style="color:var(--azul-oscuro)">Rutina</option>
+            <option value="Verificación" style="color:#059669">Verificación</option>
+            <option value="Validación" style="color:#d97706">Validación</option>
+            <option value="Otros" style="color:#6b7280">Otros</option>
+          </select>
+        </td>
+        <td>
+          <div class="dropdown-container" id="box_combo_${idx}">
+            <input type="text" id="combo_${idx}" class="td-input req-s1" placeholder="Buscar..." autocomplete="off" onfocus="mostrarOpcionesGeneral('lista_${idx}', 'combo_${idx}')" oninput="filtrarOpcionesGeneral('lista_${idx}', 'combo_${idx}')">
+            <span class="clear-btn" id="clear_combo_${idx}" onclick="limpiarDropdownGeneral('lista_${idx}', 'combo_${idx}', true, ${idx})">✖</span>
+            <span class="dropdown-chevron" style="right:5px;">▼</span><div class="dropdown-list" id="lista_${idx}"></div>
+          </div>
+          <input type="text" id="txt_libre_${idx}" class="td-input req-s1 text-center" style="display:none;" placeholder="Digite control...">
+        </td>
+        <td><textarea id="prod_${idx}" class="td-input text-left read-only req-s1" readonly rows="2" style="resize:vertical; min-height:40px;"></textarea></td>
+        <td>
+          <div id="guia_${idx}" style="font-size:10px; color:var(--gris); margin-bottom:5px; font-style:italic; border-bottom:1px dashed #e1e5eb; padding-bottom:3px; word-wrap:break-word;">Esperando...</div>
+          <div class="limites-box">
+            <div class="limite-item"><small>Lím. Inferior</small><input type="number" id="inf_${idx}" class="td-input req-s1-num" step="0.01" min="0"></div>
+            <div class="limite-item"><small>Lím. Superior</small><input type="number" id="sup_${idx}" class="td-input req-s1-num" step="0.01" min="0"></div>
+            <label class="radio-label" style="margin-top:14px; margin-left:5px;"><input type="checkbox" id="na_${idx}" onchange="toggleNA(${idx})"> NA</label>
+          </div>
+        </td>
+      `;
+    }
+
+    function cambiarTipoMuestraFila(idx) {
+      const tipoSel = document.getElementById(`tipo_${idx}`);
+      const tipoVal = tipoSel.value;
+      
+      if(tipoVal === 'Rutina') { tipoSel.style.color = 'var(--azul-oscuro)'; tipoSel.style.backgroundColor = '#f0f9ff'; tipoSel.style.borderColor = '#bae6fd'; }
+      else if(tipoVal === 'Verificación') { tipoSel.style.color = '#059669'; tipoSel.style.backgroundColor = '#ecfdf5'; tipoSel.style.borderColor = '#a7f3d0'; }
+      else if(tipoVal === 'Validación') { tipoSel.style.color = '#d97706'; tipoSel.style.backgroundColor = '#fffbeb'; tipoSel.style.borderColor = '#fde68a'; }
+      else { tipoSel.style.color = '#6b7280'; tipoSel.style.backgroundColor = '#f3f4f6'; tipoSel.style.borderColor = '#e5e7eb'; }
+
+      const usaCombo = (tipoVal === 'Rutina' || tipoVal === 'Verificación');
+      const comboDiv = document.getElementById(`box_combo_${idx}`);
+      const inputLibre = document.getElementById(`txt_libre_${idx}`);
+      const prodCell = document.getElementById(`prod_${idx}`);
+      const comboEl = document.getElementById(`combo_${idx}`);
+      const clearBtn = document.getElementById(`clear_combo_${idx}`);
+      const guiaArea = document.getElementById(`guia_${idx}`);
+      
+      comboEl.value = ""; 
+      inputLibre.value = "";
+      prodCell.value = "";
+      if(clearBtn) clearBtn.style.display = 'none';
+      if(guiaArea) { guiaArea.innerText = "Esperando..."; guiaArea.style.color = "var(--gris)"; }
+      
+      document.getElementById(`na_${idx}`).checked = false; toggleNA(idx);
+      document.getElementById(`inf_${idx}`).value = ""; document.getElementById(`sup_${idx}`).value = "";
+
+      if (usaCombo) {
+        comboDiv.style.display = "block"; inputLibre.style.display = "none";
+        prodCell.classList.add('read-only'); prodCell.readOnly = true;
+        const dbActiva = (tipoVal === 'Verificación') ? dbVerificacion : dbMuestras;
+        poblarComboGeneral(dbActiva.map(m=>m.control), `lista_${idx}`, `combo_${idx}`, true, idx);
+      } else {
+        comboDiv.style.display = "none"; inputLibre.style.display = "block";
+        prodCell.classList.remove('read-only'); prodCell.readOnly = false;
+        if(guiaArea) guiaArea.innerText = "Edición libre habilitada";
+      }
+    }
+
+    function toggleNA(idx) {
+      const isC = document.getElementById(`na_${idx}`).checked, inf = document.getElementById(`inf_${idx}`), sup = document.getElementById(`sup_${idx}`);
+      inf.disabled = isC; sup.disabled = isC;
+      if(isC) { 
+        inf.classList.add('read-only'); sup.classList.add('read-only'); 
+        inf.classList.remove('invalid'); sup.classList.remove('invalid'); 
+        inf.value = ""; sup.value = "";
+      } else { 
+        inf.classList.remove('read-only'); sup.classList.remove('read-only'); 
+      }
+    }
+
+    function mostrarModalAlertaRutina(codigo) {
+      document.getElementById('lblMuestraRutina').innerText = codigo;
+      document.getElementById('modal-alerta-rutina').style.display = 'flex';
+    }
+
+    function seleccionarControl(idx) {
+      const cCod = document.getElementById(`combo_${idx}`).value;
+      const pArea = document.getElementById(`prod_${idx}`);
+      const gArea = document.getElementById(`guia_${idx}`);
+      const inf = document.getElementById(`inf_${idx}`);
+      const sup = document.getElementById(`sup_${idx}`);
+      const naChk = document.getElementById(`na_${idx}`);
+      
+      const tipoVal = document.getElementById(`tipo_${idx}`).value;
+      
+      if (tipoVal === 'Rutina' && controlesRutina.includes(cCod)) {
+        document.getElementById(`combo_${idx}`).value = "";
+        const clearBtn = document.getElementById(`clear_combo_${idx}`);
+        if(clearBtn) clearBtn.style.display = 'none';
+        pArea.value = ""; gArea.innerText = "Esperando..."; gArea.style.color = "var(--gris)"; 
+        mostrarModalAlertaRutina(cCod);
+        return;
+      }
+
+      const dbActiva = (tipoVal === 'Verificación') ? dbVerificacion : dbMuestras;
+      const data = dbActiva.find(m => m.control === cCod);
+      
+      if (data) { 
+        pArea.value = data.producto; 
+        gArea.innerText = (tipoVal === 'Verificación') ? "Verificación de muestra anterior" : ("LIMS: " + data.especificacion); 
+        gArea.style.color = "var(--azul-oscuro)"; 
+        pArea.classList.remove('invalid');
+
+        if (tipoVal === 'Verificación') {
+          if (data.inf && data.inf.toString().toUpperCase().includes("NO APLICA")) { naChk.checked = true; } 
+          else { naChk.checked = false; inf.value = data.inf ? data.inf.toString().replace(',','.') : ""; sup.value = data.sup ? data.sup.toString().replace(',','.') : ""; }
+          toggleNA(idx);
+        } else {
+          inf.value = ""; sup.value = ""; naChk.checked = false; toggleNA(idx);
+        }
+      } else { 
+        pArea.value = ""; gArea.innerText = "No encontrado"; gArea.style.color = "var(--error)"; 
+      }
+    }
+
+    // ================= TRANSICIÓN S1 -> S2 =================
+    function irSiguiente1() {
+      if (numFilas === 0) { mostrarToast("Debe agregar muestras.", "error"); return; }
+      
+      let err = false;
+      let mapTempRep = Object.assign({}, mapReplicas); 
+      let newMuestras = [];
+      let counts = { "Rutina": 0, "Verificación": 0, "Validación": 0, "Otros": 0 };
+
+      // 🛠️ BUGFIX: Validación de vacíos corregida y blindada
+      for (let i = 1; i <= numFilas; i++) {
+        const tipoVal = document.getElementById(`tipo_${i}`).value;
+        const usaCombo = (tipoVal === 'Rutina' || tipoVal === 'Verificación');
+        
+        const ctrl = usaCombo ? document.getElementById(`combo_${i}`) : document.getElementById(`txt_libre_${i}`);
+        const prod = document.getElementById(`prod_${i}`);
+        const inf = document.getElementById(`inf_${i}`);
+        const sup = document.getElementById(`sup_${i}`);
+        const chk = document.getElementById(`na_${i}`).checked;
+
+        if(!ctrl.value || !ctrl.value.trim()) { ctrl.classList.add('invalid'); err=true; } else ctrl.classList.remove('invalid');
+        if(!prod.value || !prod.value.trim()) { prod.classList.add('invalid'); err=true; } else prod.classList.remove('invalid');
+        if(!chk) {
+          if(!inf.value) { inf.classList.add('invalid'); err=true; } else inf.classList.remove('invalid');
+          if(!sup.value) { sup.classList.add('invalid'); err=true; } else sup.classList.remove('invalid');
+        }
+
+        let cTxt = ctrl.value ? ctrl.value.trim() : ""; 
+        let pTxt = prod.value ? prod.value.trim() : "";
+        let repBase = mapTempRep[cTxt] || 0;
+        let r1 = repBase + 1, r2 = repBase + 2;
+        mapTempRep[cTxt] = r2; 
+        counts[tipoVal]++;
+
+        const dbActiva = (tipoVal === 'Verificación') ? dbVerificacion : dbMuestras;
+        let idenTxt = "N/A";
+        const baseM = dbActiva.find(m => m.control === cTxt);
+        if(baseM && baseM.identificacion) idenTxt = baseM.identificacion;
+
+        let old1 = muestrasBatch[(i-1)*2] || {}; let old2 = muestrasBatch[(i-1)*2 + 1] || {};
+
+        newMuestras.push({ 
+          tipo: tipoVal, c: cTxt, p: pTxt, r: r1, iden: idenTxt, inf: inf.value, sup: sup.value, na: chk,
+          pso: old1.pso || "", bal: old1.bal || "", bM: old1.bM || "", pip: old1.pip || "", bD: old1.bD || "", isa: old1.isa || "", mv: old1.mv || "", mgkg: old1.mgkg || "" 
+        });
+        newMuestras.push({ 
+          tipo: tipoVal, c: cTxt, p: pTxt, r: r2, iden: idenTxt, inf: inf.value, sup: sup.value, na: chk,
+          pso: old2.pso || "", bal: old2.bal || "", bM: old2.bM || "", pip: old2.pip || "", bD: old2.bD || "", isa: old2.isa || "", mv: old2.mv || "", mgkg: old2.mgkg || "" 
+        });
+      }
+
+      if (err) { mostrarToast("Complete todos los campos del Segmento 1 para avanzar.", "error"); return; }
+      muestrasBatch = newMuestras; 
+
+      let summaryText = Object.entries(counts).filter(([k,v]) => v > 0).map(([k,v]) => `${v} ${k}`).join(', ');
+      
+      document.getElementById('resFecha').value = document.getElementById('fechaHora').value;
+      document.getElementById('resTipo').value = summaryText;
+      document.getElementById('resTotal').value = muestrasBatch.length;
+
+      armarTablaPrep();
+
+      document.getElementById('segmento1').classList.remove('active'); document.getElementById('segmento2').classList.add('active');
+      document.getElementById('step1').classList.remove('active'); document.getElementById('step2').classList.add('active');
+      
+      document.getElementById('btnCerrar').style.display = 'none'; document.getElementById('btnSiguienteS1').style.display = 'none';
+      document.getElementById('btnAtras1').style.display = 'flex'; document.getElementById('btnSiguienteS2').style.display = 'flex';
+    }
+
+    function irAtras(desde) {
+      if(desde === 1) { 
+        guardarEstadoPrep();
+        document.getElementById('segmento2').classList.remove('active'); document.getElementById('segmento1').classList.add('active');
+        document.getElementById('step2').classList.remove('active'); document.getElementById('step1').classList.add('active');
+        
+        document.getElementById('btnCerrar').style.display = 'flex'; document.getElementById('btnSiguienteS1').style.display = 'flex';
+        document.getElementById('btnAtras1').style.display = 'none'; document.getElementById('btnSiguienteS2').style.display = 'none';
+      } else if (desde === 2) { 
+        guardarEstadoLect();
+        document.getElementById('segmento3').classList.remove('active'); document.getElementById('segmento2').classList.add('active');
+        document.getElementById('step3').classList.remove('active'); document.getElementById('step2').classList.add('active');
+        
+        document.getElementById('btnAtras1').style.display = 'flex'; document.getElementById('btnSiguienteS2').style.display = 'flex';
+        document.getElementById('btnAtras2').style.display = 'none'; document.getElementById('btnFinalizar').style.display = 'none';
+      }
+    }
+
+    // ================= SEGMENTO II: PREPARACIÓN =================
+    function armarTablaPrep() {
+      const tbody = document.getElementById('tbodyPrep'); tbody.innerHTML = '';
+      
+      for (let i = 0; i < muestrasBatch.length; i += 2) {
+        const m1 = muestrasBatch[i]; const m2 = muestrasBatch[i+1];
+        
+        let badgeColor = m1.tipo === 'Rutina' ? '#0a4079' : (m1.tipo === 'Verificación' ? '#059669' : (m1.tipo === 'Validación' ? '#d97706' : '#6b7280'));
+        let badgeBg = m1.tipo === 'Rutina' ? '#f0f9ff' : (m1.tipo === 'Verificación' ? '#ecfdf5' : (m1.tipo === 'Validación' ? '#fffbeb' : '#f3f4f6'));
+        let tipoBadge = `<span class="tipo-badge" style="background-color:${badgeBg}; color:${badgeColor}; border-color:${badgeColor};">${m1.tipo}</span>`;
+
+        const cDrop = (id, pl, val) => `
+          <div class="dropdown-container" style="margin-top:4px;">
+            <input type="text" id="${id}" class="td-input" placeholder="${pl}" value="${val}" autocomplete="off" onfocus="mostrarOpcionesGeneral('l_${id}', '${id}')" oninput="filtrarOpcionesGeneral('l_${id}', '${id}')">
+            <span class="clear-btn" id="clear_${id}" onclick="limpiarDropdownGeneral('l_${id}', '${id}')" style="${val?'display:block':'display:none'}">✖</span>
+            <span class="dropdown-chevron" style="right:5px;">▼</span><div class="dropdown-list" id="l_${id}"></div>
+          </div>`;
+
+        let cb1 = cDrop(`balanza_p_${i}`, "Balanza...", m1.bal); let cm1 = cDrop(`balonM_p_${i}`, "Balón M...", m1.bM); let cp1 = cDrop(`pipeta_p_${i}`, "Pipeta...", m1.pip); let cd1 = cDrop(`balonD_p_${i}`, "Balón D...", m1.bD);
+        let cb2 = cDrop(`balanza_p_${i+1}`, "Balanza...", m2.bal); let cm2 = cDrop(`balonM_p_${i+1}`, "Balón M...", m2.bM); let cp2 = cDrop(`pipeta_p_${i+1}`, "Pipeta...", m2.pip); let cd2 = cDrop(`balonD_p_${i+1}`, "Balón D...", m2.bD);
+
+        tbody.innerHTML += `
+          <tr style="border-top: 3px solid #e2e8f0; background: #fff;">
+            <td rowspan="2" style="border-right:1px solid #e1e5eb; vertical-align:middle; line-height: 1.4;"><strong>${m1.c}</strong><br>${tipoBadge}</td>
+            <td rowspan="2" class="text-left" style="border-right:1px solid #e1e5eb; vertical-align:middle;"><span style="font-size:10px; color:var(--gris); display:block; text-align:left; line-height:1.2;">${m1.p}</span></td>
+            <td style="font-weight:bold; color:var(--cian); vertical-align:middle;">${m1.r}</td>
+            <td style="vertical-align:middle; padding: 8px;">
+              <div style="display: flex; flex-direction: column; gap: 6px;">
+                <input type="number" id="peso_p_${i}" class="td-input" style="font-weight:bold; color:var(--azul-oscuro); width: 100%;" step="0.0001" min="0.0001" placeholder="Ej: 5.0125" value="${m1.pso}">
+                ${cb1}
+              </div>
+            </td>
+            <td style="vertical-align:middle;">${cm1}</td><td style="vertical-align:middle;">${cp1}</td><td style="vertical-align:middle;">${cd1}</td>
+          </tr>
+          <tr style="background: #fafbfc; border-bottom: 3px solid #e2e8f0;">
+            <td style="font-weight:bold; color:var(--cian); vertical-align:middle;">${m2.r}</td>
+            <td style="vertical-align:middle; padding: 8px;">
+              <div style="display: flex; flex-direction: column; gap: 6px;">
+                <input type="number" id="peso_p_${i+1}" class="td-input" style="font-weight:bold; color:var(--azul-oscuro); width: 100%;" step="0.0001" min="0.0001" placeholder="Ej: 5.0125" value="${m2.pso}">
+                ${cb2}
+              </div>
+            </td>
+            <td style="vertical-align:middle;">${cm2}</td><td style="vertical-align:middle;">${cp2}</td><td style="vertical-align:middle;">${cd2}</td>
+          </tr>
+        `;
+      }
+      
+      setTimeout(() => {
+        for (let i = 0; i < muestrasBatch.length; i++) {
+          poblarComboGeneral(dataBalanzas, `l_balanza_p_${i}`, `balanza_p_${i}`);
+          poblarComboGeneral(dataBalones100, `l_balonM_p_${i}`, `balonM_p_${i}`);
+          poblarComboGeneral(dataPipetas10, `l_pipeta_p_${i}`, `pipeta_p_${i}`);
+          poblarComboGeneral(dataBalones100, `l_balonD_p_${i}`, `balonD_p_${i}`);
+        }
+      }, 50);
+    }
+
+    function irSiguiente2() {
+      guardarEstadoPrep(); 
+      let err = false;
+      
+      // 🛠️ BUGFIX: Bucle blindado para validar inputs
+      for (let i = 0; i < muestrasBatch.length; i++) {
+        const ids = ['peso_p_', 'balanza_p_', 'balonM_p_', 'pipeta_p_', 'balonD_p_'];
+        ids.forEach(prefix => {
+          const el = document.getElementById(prefix + i);
+          if (el) {
+            if (!el.value || el.value.trim() === "") { 
+              el.classList.add('invalid'); err = true; 
+            } else { 
+              el.classList.remove('invalid'); 
+            }
+          }
+        });
+      }
+      
+      if (err) { mostrarToast("Todos los campos de preparación son obligatorios para avanzar.", "error"); return; }
+
+      armarTablaResultados();
+
+      document.getElementById('segmento2').classList.remove('active'); document.getElementById('segmento3').classList.add('active');
+      document.getElementById('step2').classList.remove('active'); document.getElementById('step3').classList.add('active');
+      
+      document.getElementById('btnAtras1').style.display = 'none'; document.getElementById('btnSiguienteS2').style.display = 'none';
+      document.getElementById('btnAtras2').style.display = 'flex'; document.getElementById('btnFinalizar').style.display = 'flex';
+    }
+
+    // ================= SEGMENTO III: LECTURA Y CÁLCULOS =================
+    function renderizarCurva() {
+      const curvaId = document.getElementById('selCurva').value;
+      const curvaDetails = document.getElementById('curvaDetails');
+      
+      if(!curvaId) { curvaDetails.style.display = 'none'; curvaActiva = null; return; }
+      
+      curvaActiva = curvasHoy.find(c => c.id == curvaId);
+      curvaDetails.style.display = 'block';
+
+      const tb = document.getElementById('tbodyCurvaDet'); tb.innerHTML = '';
+      let xData=[], yData=[];
+
+      curvaActiva.niveles.forEach((niv, i) => {
+        tb.innerHTML += `<tr><td>${niv}</td><td>${curvaActiva.conc[i]}</td><td>${curvaActiva.mv[i]}</td><td><span style="font-family:monospace; color:var(--gris);">${curvaActiva.log[i]}</span></td></tr>`;
+        if(!isNaN(curvaActiva.log[i])) { xData.push(curvaActiva.log[i]); yData.push(curvaActiva.mv[i] - (curvaActiva.mv[0] || 0)); }
+      });
+
+      document.getElementById('res_a').innerText = curvaActiva.a.toFixed(2); document.getElementById('res_b').innerText = curvaActiva.b.toFixed(2);
+      document.getElementById('res_r2').innerText = curvaActiva.r2.toFixed(4);
+      document.getElementById('ecuacion').innerText = `y = ${curvaActiva.a.toFixed(2)}x ${curvaActiva.b >= 0 ? '+' : '-'} ${Math.abs(curvaActiva.b).toFixed(2)}`;
+
+      if(chartInstance) chartInstance.destroy();
+      const ctx = document.getElementById('graficaCurvaRes').getContext('2d');
+      chartInstance = new Chart(ctx, {
+        type: 'scatter',
+        data: {
+          datasets: [{ label: 'Puntos', data: xData.map((x,i)=>({x:x, y:yData[i]})), backgroundColor: '#0a4079', pointRadius: 5 },
+                     { label: 'Tendencia', data: [{x:Math.min(...xData), y:curvaActiva.a*Math.min(...xData)+curvaActiva.b}, {x:Math.max(...xData), y:curvaActiva.a*Math.max(...xData)+curvaActiva.b}], type: 'line', borderColor: '#afcc46', borderWidth: 2, fill: false, pointRadius: 0 }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+      });
+
+      muestrasBatch.forEach((_, idx) => calcularConcentracion(idx));
+    }
+
+    function armarTablaResultados() {
+      const tbody = document.getElementById('tbodyResultados'); tbody.innerHTML = '';
+      
+      for (let i = 0; i < muestrasBatch.length; i += 2) {
+        const m1 = muestrasBatch[i]; const m2 = muestrasBatch[i+1];
+        const pairIndex = i / 2;
+        
+        let badgeColor = m1.tipo === 'Rutina' ? '#0a4079' : (m1.tipo === 'Verificación' ? '#059669' : (m1.tipo === 'Validación' ? '#d97706' : '#6b7280'));
+        let badgeBg = m1.tipo === 'Rutina' ? '#f0f9ff' : (m1.tipo === 'Verificación' ? '#ecfdf5' : (m1.tipo === 'Validación' ? '#fffbeb' : '#f3f4f6'));
+        let tipoBadge = `<span class="tipo-badge" style="background-color:${badgeBg}; color:${badgeColor}; border-color:${badgeColor};">${m1.tipo}</span>`;
+        
+        let sISA1 = `<select id="isa_res_${i}" class="td-input"><option value="">ISA...</option>`; lotesISA.forEach(l => { sISA1 += `<option value="${l}" ${m1.isa===l?'selected':''}>${l}</option>`; }); sISA1 += `</select>`;
+        let sISA2 = `<select id="isa_res_${i+1}" class="td-input"><option value="">ISA...</option>`; lotesISA.forEach(l => { sISA2 += `<option value="${l}" ${m2.isa===l?'selected':''}>${l}</option>`; }); sISA2 += `</select>`;
+
+        tbody.innerHTML += `
+          <tr style="border-top: 3px solid #e2e8f0; background: #fff;">
+            <td rowspan="2" style="border-right:1px solid #e1e5eb; vertical-align:middle; line-height: 1.4;"><strong>${m1.c}</strong><br>${tipoBadge}</td>
+            <td rowspan="2" class="text-left" style="border-right:1px solid #e1e5eb; vertical-align:middle;"><span style="font-size:10px; color:var(--gris); display:block; text-align:left; line-height:1.2;">${m1.p}</span></td>
+            <td style="font-weight:bold; vertical-align:middle;">${m1.r}</td>
+            <td>${sISA1}</td>
+            <td><input type="number" id="mv_res_${i}" class="td-input" style="font-weight:bold; font-size:12px;" step="0.1" placeholder="mV" value="${m1.mv}" oninput="calcularConcentracion(${i})"></td>
+            <td style="border-right:1px solid #e1e5eb; vertical-align:middle;"><strong id="mgkg_res_${i}" style="color:var(--azul-oscuro); font-size:13px;">${m1.mgkg || "-"}</strong></td>
+            
+            <td rowspan="2" style="vertical-align:middle; border-right:1px solid #e1e5eb;"><strong id="prom_${pairIndex}" style="color:var(--azul-oscuro); font-size:12px;">-</strong></td>
+            <td rowspan="2" style="vertical-align:middle; border-right:1px solid #e1e5eb;"><span id="rsd_r_${pairIndex}" style="color:var(--gris); font-family:monospace; font-size:11px;">-</span></td>
+            <td rowspan="2" style="vertical-align:middle; border-right:1px solid #e1e5eb;"><span id="prsdr_R_${pairIndex}" style="color:var(--gris); font-family:monospace; font-size:11px;">-</span></td>
+            
+            <td rowspan="2" style="vertical-align:middle; border-right:1px solid #e1e5eb;">
+              <strong id="horrat_${pairIndex}" style="font-size:13px;">-</strong>
+              <div id="horrat_badge_${pairIndex}" style="margin-top:3px;"></div>
+            </td>
+            <td rowspan="2" style="vertical-align:middle;">
+              <div id="conf_esp_${pairIndex}"><span class="badge badge-pendiente">Pendiente</span></div>
+              <div style="font-size:9px; color:var(--gris); margin-top:4px;">${m1.na ? 'Sin límites (NA)' : `[${m1.inf} - ${m1.sup}]`}</div>
+            </td>
+          </tr>
+          <tr style="background: #fafbfc; border-bottom: 3px solid #e2e8f0;">
+            <td style="font-weight:bold; vertical-align:middle;">${m2.r}</td>
+            <td>${sISA2}</td>
+            <td><input type="number" id="mv_res_${i+1}" class="td-input" style="font-weight:bold; font-size:12px;" step="0.1" placeholder="mV" value="${m2.mv}" oninput="calcularConcentracion(${i+1})"></td>
+            <td style="border-right:1px solid #e1e5eb; vertical-align:middle;"><strong id="mgkg_res_${i+1}" style="color:var(--azul-oscuro); font-size:13px;">${m2.mgkg || "-"}</strong></td>
+          </tr>
+        `;
+      }
+      
+      if(document.getElementById('selCurva').value) renderizarCurva();
+    }
+
+    function calcularConcentracion(idx) {
+      const valMv = parseFloat(document.getElementById(`mv_res_${idx}`).value);
+      const celdaMg = document.getElementById(`mgkg_res_${idx}`);
+      const pairIndex = Math.floor(idx / 2);
+      
+      if (isNaN(valMv) || !curvaActiva) { 
+        celdaMg.innerText = "-"; 
+        calcularPar(pairIndex);
+        return; 
+      }
+
+      const mvBlanco = parseFloat(curvaActiva.mv[0]) || 0;
+      const yCorr = valMv - mvBlanco;
+      const logC = (yCorr - curvaActiva.b) / curvaActiva.a;
+      const cRead = Math.pow(10, logC);
+
+      const w = parseFloat(muestrasBatch[idx].pso);
+      const factorDilucion = 1000 / w; 
+      const cFinal = cRead * factorDilucion;
+      
+      celdaMg.innerText = cFinal.toFixed(2);
+      calcularPar(pairIndex);
+    }
+
+    function calcularPar(pairIndex) {
+      const idx1 = pairIndex * 2; const idx2 = pairIndex * 2 + 1;
+      const txt1 = document.getElementById(`mgkg_res_${idx1}`).innerText;
+      const txt2 = document.getElementById(`mgkg_res_${idx2}`).innerText;
+      const m1 = muestrasBatch[idx1]; 
+      
+      const cProm = document.getElementById(`prom_${pairIndex}`);
+      const cPR = document.getElementById(`prsdr_R_${pairIndex}`);
+      const cRSDr = document.getElementById(`rsd_r_${pairIndex}`); 
+      const cHor = document.getElementById(`horrat_${pairIndex}`);
+      const cHorBadge = document.getElementById(`horrat_badge_${pairIndex}`);
+      const cConfEsp = document.getElementById(`conf_esp_${pairIndex}`);
+      
+      if (txt1 === "-" || txt2 === "-" || !txt1 || !txt2) {
+        cProm.innerText = "-"; cPR.innerText = "-"; cRSDr.innerText = "-"; cHor.innerText = "-"; cHorBadge.innerHTML = "";
+        cConfEsp.innerHTML = "<span class='badge badge-pendiente'>Pendiente</span>"; 
+        return;
+      }
+      
+      const c1 = parseFloat(txt1), c2 = parseFloat(txt2);
+      const prom = (c1 + c2) / 2;
+      
+      cProm.innerText = prom.toFixed(2);
+      
+      if (m1.na) {
+        cConfEsp.innerHTML = "<span class='badge' style='background:#f1f5f9; color:#64748b; border-color:#cbd5e1;'>NO APLICA</span>";
+      } else {
+        const inf = parseFloat(m1.inf);
+        const sup = parseFloat(m1.sup);
+        if (prom >= inf && prom <= sup) {
+          cConfEsp.innerHTML = "<span class='badge badge-conforme'>CUMPLE</span>";
+        } else {
+          cConfEsp.innerHTML = "<span class='badge badge-noconforme'>NO CUMPLE</span>";
+        }
+      }
+      
+      if (prom === 0) {
+         cPR.innerText = "0.00"; cRSDr.innerText = "0.00"; cHor.innerText = "0.00";
+         cHorBadge.innerHTML = "<span class='badge badge-conforme' style='padding:2px 4px; border:none; margin-top:2px;'>CUMPLE</span>"; 
+         return;
+      }
+      
+      const C = 0.000001; 
+      const c_calc = C * prom; 
+      
+      let Sr = 0;
+      if (c_calc < 0.00000012) Sr = 0.22 * c_calc;
+      else if (c_calc > 0.138) Sr = Math.sqrt(c_calc) * 0.01;
+      else Sr = Math.pow(c_calc, 0.8495) * 0.02;
+
+      const prsdR = (Sr / c_calc) * 100;
+      const sd_exp = Math.abs(c1 - c2) / Math.SQRT2;
+      const rsd_r = (sd_exp / prom) * 100;
+      
+      const horrat = rsd_r / prsdR;
+      
+      cPR.innerText = prsdR.toFixed(2);
+      cRSDr.innerText = rsd_r.toFixed(2); 
+      cHor.innerText = horrat.toFixed(2);
+      
+      if (horrat <= 1.3) {
+         cHorBadge.innerHTML = "<span class='badge badge-conforme' style='padding:2px 4px; border:none; margin-top:2px;'>CUMPLE</span>";
+      } else {
+         cHorBadge.innerHTML = "<span class='badge badge-noconforme' style='padding:2px 4px; border:none; margin-top:2px;'>NO CUMPLE</span>";
+      }
+    }
+
+    // ================= SEGMENTO IV: GUARDADO Y USO =================
+    function abrirModalUso() {
+      guardarEstadoLect();
+      
+      if(!document.getElementById('selCurva').value) { mostrarToast("Debe seleccionar una Curva de Calibración.", "error"); return; }
+      
+      let err = false;
+      for(let i=0; i<muestrasBatch.length; i++) { if(!muestrasBatch[i].isa || !muestrasBatch[i].mv) err = true; }
+      if(err) { mostrarToast("Todas las réplicas deben tener un lote ISA y lectura de mV.", "error"); return; }
+      
+      if(!document.getElementById('eqPh').value) { mostrarToast("Asegúrese de registrar el código del pH-metro.", "error"); return; }
+
+      document.getElementById('modal-final').style.display = 'flex';
+    }
+
+    function enviarAlServidor() {
+      const dren = document.querySelector('input[name="opt_drenado"]:checked');
+      const limp = document.querySelector('input[name="opt_limpieza"]:checked');
+      
+      if(!dren || !limp) { mostrarToast("Debe confirmar el drenado y la limpieza del equipo.", "error"); return; }
+
+      document.getElementById('modal-final').style.display = 'none';
+      
+      document.getElementById('overlay-submit').style.display = 'flex';
+      document.getElementById('submit-spinner').style.display = 'block';
+      document.getElementById('submit-icon-success').style.display = 'none';
+      document.getElementById('submit-title').innerText = 'Guardando reporte...';
+      document.getElementById('submit-title').style.color = 'var(--azul-oscuro)';
+      document.getElementById('submit-text').innerText = 'Por favor, no cierre la ventana.';
+
+      const payload = {
+        eqPh: document.getElementById('eqPh').value,
+        eqVerificacion: document.getElementById('eqVerificacion').value,
+        curva: document.getElementById('selCurva').options[document.getElementById('selCurva').selectedIndex].text,
+        drenado: dren.value,
+        limpieza: limp.value,
+        muestras: []
+      };
+
+      for(let i = 0; i < muestrasBatch.length; i += 2) {
+        let m1 = muestrasBatch[i];
+        let m2 = muestrasBatch[i+1];
+        let pIdx = i / 2;
+
+        let prom = document.getElementById(`prom_${pIdx}`).innerText;
+        let rsdr = document.getElementById(`rsd_r_${pIdx}`).innerText;
+        let prsdr = document.getElementById(`prsdr_R_${pIdx}`).innerText;
+        let horrat = document.getElementById(`horrat_${pIdx}`).innerText;
+        let confHorrat = document.getElementById(`horrat_badge_${pIdx}`).innerText.includes("NO") ? "No cumple" : "Cumple";
+
+        payload.muestras.push({
+          tipoMuestra: m1.tipo, 
+          control: m1.c, producto: m1.p, identificacion: m1.iden, inf: m1.inf, sup: m1.sup, na: m1.na,
+          promedio: prom, rsdr: rsdr, prsdr: prsdr, horrat: horrat, confHorrat: confHorrat,
+          rep1: m1, rep2: m2
+        });
+      }
+
+      google.script.run
+        .withSuccessHandler(res => {
+          document.getElementById('submit-spinner').style.display = 'none';
+          document.getElementById('submit-icon-success').style.display = 'block';
+          document.getElementById('submit-title').innerText = '¡Proceso Completado!';
+          document.getElementById('submit-title').style.color = 'var(--success)';
+          document.getElementById('submit-text').innerText = res + '\nCerrando ventana...';
+          
+          setTimeout(() => google.script.host.close(), 2500);
+        })
+        .withFailureHandler(err => {
+          document.getElementById('overlay-submit').style.display = 'none';
+          mostrarToast(err.message, "error");
+        })
+        .guardarReporteMuestras(payload);
+    }
+  </script>
+</body>
+</html>

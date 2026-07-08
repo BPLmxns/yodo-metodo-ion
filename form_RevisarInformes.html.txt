@@ -1,0 +1,311 @@
+<!-- form_RevisarInformes.html -->
+
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    :root {
+      --lima: #afcc46; --cian: #00abe6; --azul-oscuro: #0a4079;
+      --gris: #6b7280; --fondo: #f4f7f9; --error: #ef4444; --success: #10b981;
+    }
+    body { font-family: 'Segoe UI', sans-serif; background: var(--fondo); margin: 0; padding: 0; color: #333; }
+    
+    .modal-header { background: var(--azul-oscuro); color: white; padding: 15px; text-align: center; border-bottom: 4px solid var(--lima); position: sticky; top: 0; z-index: 10; }
+    .modal-header h2 { margin: 0; font-size: 16px; text-transform: uppercase; letter-spacing: 1px; }
+
+    .content { padding: 20px; padding-bottom: 80px; }
+    
+    .card { background: white; border-radius: 8px; padding: 20px; margin-bottom: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border: 1px solid #e1e5eb; }
+    .card-title { font-size: 12px; font-weight: 800; color: var(--azul-oscuro); text-transform: uppercase; margin-bottom: 15px; display: flex; align-items: center; gap: 6px; }
+    .card-title::before { content: ""; width: 4px; height: 12px; background: var(--cian); border-radius: 5px; }
+
+    /* ====== TABLA PRINCIPAL ====== */
+    .table-container { overflow-x: auto; border: 1px solid #e1e5eb; border-radius: 6px; }
+    table { width: 100%; border-collapse: collapse; min-width: 900px; background: white; }
+    th { background: #f8f9fa; color: var(--azul-oscuro); padding: 12px 15px; font-size: 12px; text-align: center; border-bottom: 2px solid #e1e5eb; font-weight: 700; text-transform: uppercase; }
+    td { padding: 12px 15px; font-size: 13px; border-bottom: 1px solid #e1e5eb; text-align: center; vertical-align: middle; transition: all 0.3s; }
+    
+    .text-left { text-align: left !important; }
+    
+    .btn-detalles { background: #f1f5f9; border: 1px solid #ced4da; border-radius: 4px; padding: 6px 12px; font-size: 11px; font-weight: 700; color: var(--azul-oscuro); cursor: pointer; transition: 0.2s; }
+    .btn-detalles:hover { background: var(--azul-oscuro); color: white; border-color: var(--azul-oscuro); }
+
+    .ac-icon { font-size: 18px; font-weight: bold; }
+    .ac-check { color: var(--success); }
+    .ac-cross { color: var(--error); }
+
+    input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--azul-oscuro); cursor: pointer; }
+    input[type="checkbox"]:disabled { cursor: not-allowed; opacity: 0.5; }
+
+    .row-enviada td { background-color: #f8fafc; color: #94a3b8; }
+    .row-enviada strong { color: #64748b !important; }
+
+    /* ====== TABLA SECUNDARIA (DETALLES HISTORIAL) ====== */
+    .row-detalles { display: none; background: #fcfcfc; }
+    .tabla-secundaria { width: 96%; margin: 15px auto; border: 1px dashed #cbd5e1; background: white; min-width: unset; }
+    
+    .tabla-secundaria th { 
+      background: #f1f5f9; 
+      font-size: 11px; 
+      padding: 8px; 
+      color: var(--gris); 
+      border-bottom: 1px dashed #cbd5e1; 
+      text-transform: none !important; 
+    }
+    .tabla-secundaria td { padding: 8px; font-size: 11px; border-bottom: 1px dashed #f1f5f9; }
+    
+    .badge { padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; text-transform: uppercase; display: inline-block;}
+    .bg-cumple { background: #ecfdf5; color: #059669; border: 1px solid #10b981; }
+    .bg-nocumple { background: #fef2f2; color: #dc2626; border: 1px solid #ef4444; }
+    .bg-enviada { background: var(--azul-oscuro); color: white; }
+
+    .footer { display: flex; justify-content: space-between; padding: 15px 20px; background: white; border-top: 1px solid #e1e5eb; position: fixed; bottom: 0; width: 100%; box-sizing: border-box; z-index: 10;}
+    button { padding: 10px 20px; border-radius: 5px; font-weight: 700; cursor: pointer; font-size: 12px; transition: 0.2s; border: none; display: flex; align-items: center; gap: 8px;}
+    .btn-cancel { background: transparent; border: 1px solid var(--gris); color: var(--gris); }
+    .btn-cancel:hover { background: #f1f5f9; color: var(--azul-oscuro); border-color: var(--azul-oscuro);}
+    .btn-submit { background: var(--azul-oscuro); color: white; }
+    .btn-submit:hover:not(:disabled) { background: #0d4d8d; transform: translateY(-1px); }
+    .btn-submit:disabled { background: #94a3b8; cursor: not-allowed; }
+
+    /* ====== EFECTO WIZARD DE CARGA Y ÉXITO ====== */
+    #loader { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(255, 255, 255, 0.9); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 1000; }
+    .spinner { width: 40px; height: 40px; border-radius: 50%; border: 4px solid transparent; border-top-color: var(--azul-oscuro); border-right-color: var(--lima); border-bottom-color: var(--cian); border-left-color: var(--gris); animation: spin 0.9s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    #overlay-submit {
+      display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(4px); z-index: 3000;
+      flex-direction: column; justify-content: center; align-items: center; text-align: center;
+      animation: fadeInOverlay 0.3s ease-in-out;
+    }
+    @keyframes fadeInOverlay { from { opacity: 0; } to { opacity: 1; } }
+    .submit-spinner { width: 55px; height: 55px; border-radius: 50%; border: 5px solid #e1e5eb; border-top-color: var(--azul-oscuro); border-bottom-color: var(--lima); animation: spin 1s linear infinite; margin-bottom: 20px; }
+    .submit-icon-success { display: none; font-size: 65px; margin-bottom: 10px; animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+    @keyframes popIn { 0% { transform: scale(0.3); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+    .submit-title { font-size: 18px; font-weight: 800; color: var(--azul-oscuro); margin: 0 0 8px 0; transition: color 0.3s;}
+    .submit-text { font-size: 13px; color: var(--gris); margin: 0; font-weight: 500;}
+    
+    #toast-container { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 2000; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+    .toast { padding: 10px 20px; border-radius: 6px; color: white; font-size: 12px; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,0.15); opacity: 0; transform: translateY(-20px); transition: all 0.3s ease-out; display: flex; align-items: center; gap: 8px; }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast-error { background-color: var(--error); }
+    .toast-success { background-color: var(--azul-oscuro); border-bottom: 3px solid var(--lima); }
+  </style>
+</head>
+<body>
+
+  <div id="toast-container"></div>
+
+  <div id="loader">
+    <div class="spinner"></div>
+    <p id="lblLoader" style="margin-top:15px; font-size:12px; font-weight:700; color:var(--azul-oscuro)">Cargando Muestras e Historial de Duplicados...</p>
+  </div>
+
+  <div id="overlay-submit">
+    <div class="submit-spinner" id="submit-spinner"></div>
+    <div class="submit-icon-success" id="submit-icon-success">✅</div>
+    <h3 class="submit-title" id="submit-title">Enviando solicitud...</h3>
+    <p class="submit-text" id="submit-text">Guardando datos y notificando al líder.</p>
+  </div>
+
+  <div class="modal-header">
+    <h2>Informe de Muestras</h2>
+  </div>
+
+  <div class="content">
+    <div class="card">
+      <div class="card-title">Muestras Pendientes de Informe</div>
+      <p style="font-size:12px; color:var(--gris); margin-top:-5px; margin-bottom:15px;">
+        Seleccione las muestras a reportar. Solo se pueden seleccionar muestras cuyo historial de Aseguramiento de Calidad (AC) sea conforme (✔).
+      </p>
+
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 15%;">Control</th>
+              <th style="width: 35%;">Producto</th>
+              <th style="width: 10%;">Réplicas (Max)</th>
+              <th style="width: 10%;">AC</th>
+              <th style="width: 15%;">Historial</th>
+              <th style="width: 15%;">Seleccionar</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyInformes">
+            <!-- Render dinámico -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <button type="button" class="btn-cancel" onclick="google.script.host.close()">CANCELAR</button>
+    <button type="button" class="btn-submit" id="btnSolicitar" disabled onclick="solicitarRevision()">
+      <span id="txtBtn">SOLICITAR REVISIÓN</span>
+    </button>
+  </div>
+
+  <script>
+    let muestrasPendientes = [];
+
+    window.onload = () => {
+      google.script.run
+        .withSuccessHandler(res => {
+          muestrasPendientes = res;
+          renderizarTabla(muestrasPendientes);
+        })
+        .withFailureHandler(err => { alert("Error: " + err.message); document.getElementById('loader').style.display='none'; })
+        .obtenerDatosInformes();
+    };
+
+    function mostrarToastError(msg) {
+      const t = document.getElementById('toast-container');
+      const d = document.createElement('div');
+      d.className = `toast toast-error`;
+      d.innerHTML = `⚠️ ${msg}`;
+      t.appendChild(d);
+      setTimeout(() => d.classList.add('show'), 10);
+      setTimeout(() => { d.classList.remove('show'); setTimeout(() => d.remove(), 300); }, 3500);
+    }
+
+    function renderizarTabla(muestras) {
+      const tbody = document.getElementById('tbodyInformes');
+      tbody.innerHTML = '';
+
+      if (muestras.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" style="padding:30px; color:var(--gris); font-style:italic;">No hay muestras pendientes de reporte.</td></tr>`;
+        document.getElementById('loader').style.display = 'none';
+        return;
+      }
+
+      muestras.forEach((m, idx) => {
+        const iconAC = m.ac ? `<span class="ac-icon ac-check">✔</span>` : `<span class="ac-icon ac-cross">✖</span>`;
+        
+        let chkHTML = "";
+        let rowClass = "";
+
+        if (m.enviado) {
+          rowClass = "row-enviada";
+          chkHTML = `<span class="badge bg-enviada">ENVIADO</span>`;
+        } else {
+          const disabledAttr = m.ac ? '' : 'disabled';
+          chkHTML = `<input type="checkbox" class="chk-muestra" value="${m.control}" onchange="evaluarBoton()" ${disabledAttr}>`;
+        }
+        
+        let historialHTML = '';
+        if (m.historial.length === 0) {
+          historialHTML = `<tr><td colspan="9" style="color:var(--gris); font-style:italic;">No se encontraron registros en el Control de Duplicados.</td></tr>`;
+        } else {
+          m.historial.forEach(h => {
+            const badgeClass = String(h.revision).toUpperCase().includes("NO CUMPLE") ? 'bg-nocumple' : 'bg-cumple';
+            historialHTML += `
+              <tr>
+                <td><strong>${h.tipo}</strong></td>
+                <td>${h.repA}</td>
+                <td>${h.resA}</td>
+                <td>${h.repB}</td>
+                <td>${h.resB}</td>
+                <td style="color:var(--gris);">${h.unidad}</td>
+                <td><strong style="color:var(--azul-oscuro);">${h.promedio}</strong></td>
+                <td>${h.horrat}</td>
+                <td><span class="badge ${badgeClass}">${h.revision}</span></td>
+              </tr>
+            `;
+          });
+        }
+
+        tbody.innerHTML += `
+          <tr class="${rowClass}" id="fila_main_${idx}">
+            <td><strong id="lbl_ctrl_${idx}">${m.control}</strong></td>
+            <td class="text-left"><span style="font-size:11px; display:block; line-height:1.2;">${m.producto}</span></td>
+            <td><strong>${m.maxRep}</strong></td>
+            <td>${iconAC}</td>
+            <td><button class="btn-detalles" onclick="toggleDetalles(${idx})">Ver detalles ▼</button></td>
+            <td id="celda_chk_${idx}">${chkHTML}</td>
+          </tr>
+          <tr id="det_${idx}" class="row-detalles">
+            <td colspan="6" style="padding: 0;">
+              <table class="tabla-secundaria">
+                <thead>
+                  <tr>
+                    <th>Tipo de Muestra</th>
+                    <th>Rep A</th>
+                    <th>Resultado A</th>
+                    <th>Rep B</th>
+                    <th>Resultado B</th>
+                    <th>Unidad</th>
+                    <th>Promedio</th>
+                    <th>HorRat(r)</th>
+                    <th>Estado / Revisión</th>
+                  </tr>
+                </thead>
+                <tbody>${historialHTML}</tbody>
+              </table>
+            </td>
+          </tr>
+        `;
+      });
+
+      document.getElementById('loader').style.display = 'none';
+      evaluarBoton();
+    }
+
+    function toggleDetalles(idx) {
+      const fila = document.getElementById(`det_${idx}`);
+      if (fila.style.display === 'table-row') {
+        fila.style.display = 'none';
+      } else {
+        fila.style.display = 'table-row';
+      }
+    }
+
+    function evaluarBoton() {
+      const checkboxes = document.querySelectorAll('.chk-muestra:checked');
+      const btn = document.getElementById('btnSolicitar');
+      btn.disabled = checkboxes.length === 0;
+    }
+
+    function solicitarRevision() {
+      const checkboxes = document.querySelectorAll('.chk-muestra:checked');
+      const controlesSeleccionados = Array.from(checkboxes).map(chk => chk.value);
+      
+      const btn = document.getElementById('btnSolicitar');
+      btn.disabled = true;
+
+      // Encender Pantalla de Carga Wizard
+      document.getElementById('overlay-submit').style.display = 'flex';
+      document.getElementById('submit-spinner').style.display = 'block';
+      document.getElementById('submit-icon-success').style.display = 'none';
+      document.getElementById('submit-title').innerText = 'Enviando solicitud...';
+      document.getElementById('submit-title').style.color = 'var(--azul-oscuro)';
+      document.getElementById('submit-text').innerText = 'Guardando datos y notificando al líder.';
+      
+      google.script.run
+        .withSuccessHandler(res => {
+          // Marcar las muestras locales como enviadas para que si no se cierra de golpe, se bloqueen
+          muestrasPendientes.forEach(m => {
+            if (controlesSeleccionados.includes(m.control)) m.enviado = true;
+          });
+          renderizarTabla(muestrasPendientes);
+
+          // Transición a Éxito
+          document.getElementById('submit-spinner').style.display = 'none';
+          document.getElementById('submit-icon-success').style.display = 'block';
+          document.getElementById('submit-title').innerText = '¡Solicitud Enviada!';
+          document.getElementById('submit-title').style.color = 'var(--success)';
+          document.getElementById('submit-text').innerText = res + '\nCerrando ventana...';
+          
+          setTimeout(() => google.script.host.close(), 2500);
+        })
+        .withFailureHandler(err => {
+          document.getElementById('overlay-submit').style.display = 'none';
+          mostrarToastError(err.message);
+          evaluarBoton();
+        })
+        .enviarSolicitudRevision(controlesSeleccionados);
+    }
+  </script>
+</body>
+</html>

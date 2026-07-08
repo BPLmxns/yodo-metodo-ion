@@ -1,0 +1,411 @@
+<!-- form_ConsRegistros.html -->
+
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root { --lima: #afcc46; --cian: #00abe6; --azul-oscuro: #0a4079; --gris: #6b7280; --fondo: #f4f7f9; --error: #ef4444; --success: #10b981; }
+    body { font-family: 'Segoe UI', sans-serif; background: var(--fondo); margin: 0; padding: 0; color: #333; }
+    
+    /* ====== CABECERA ANCLADA (STICKY) ULTRA-COMPACTA ====== */
+    .sticky-wrapper { position: sticky; top: 0; z-index: 100; background: var(--fondo); box-shadow: 0 4px 10px rgba(0,0,0,0.08); }
+    .header-thin { background: var(--azul-oscuro); color: white; padding: 8px; text-align: center; }
+    .header-thin h1 { margin: 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; }
+
+    .action-bar { display: flex; gap: 15px; padding: 10px 20px; background: #f8fafc; border-bottom: 2px solid var(--lima); align-items: center; }
+    
+    .search-area { display: flex; flex-direction: column; width: 320px; }
+    .search-area label { font-size: 10px; font-weight: 800; color: var(--azul-oscuro); text-transform: uppercase; margin-bottom: 4px; }
+    
+    .dropdown-container { position: relative; width: 100%; margin: 0; }
+    .dropdown-container input { width: 100%; padding: 8px 30px 8px 10px; border: 2px solid #ced4da; border-radius: 6px; font-size: 13px; box-sizing: border-box; transition: all 0.2s; font-weight: bold; color: var(--azul-oscuro); }
+    .dropdown-container input:focus { border-color: var(--cian); outline: none; box-shadow: 0 0 0 3px rgba(0,171,230,0.1); }
+    .dropdown-chevron { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 10px; color: var(--azul-oscuro); pointer-events: none; }
+    .clear-btn { position: absolute; right: 26px; top: 50%; transform: translateY(-50%); font-size: 12px; color: var(--error); cursor: pointer; display: none; z-index: 5; background: white; border-radius: 50%; width: 18px; height: 18px; text-align: center; line-height: 18px; font-weight: bold; }
+    .clear-btn:hover { background: #fef2f2; transform: translateY(-50%) scale(1.1); }
+
+    .dropdown-list { display: none; position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid var(--cian); border-radius: 5px; margin-top: 4px; max-height: 250px; overflow-y: auto; z-index: 9999; text-align: left; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+    .dropdown-list.show { display: block; }
+    .dropdown-option { padding: 10px 15px; font-size: 12px; cursor: pointer; border-bottom: 1px solid #f1f5f9; transition: background 0.2s; }
+    .dropdown-option:last-child { border-bottom: none; }
+    .dropdown-option:hover { background: #f4f7f9; color: var(--azul-oscuro); font-weight: 700; }
+    .no-results { padding: 10px 15px; font-size: 11px; color: var(--gris); font-style: italic; text-align: center; }
+
+    .sample-info-sticky { display: none; flex-grow: 1; align-items: center; justify-content: space-between; border-left: 2px solid #cbd5e1; padding-left: 15px; animation: fadeIn 0.3s; }
+    .sample-info-sticky h2 { margin: 0 0 2px 0; color: var(--azul-oscuro); font-size: 18px; }
+    .sample-info-sticky p { margin: 0; font-size: 12px; color: var(--gris); line-height: 1.2; }
+
+    /* ====== CONTENIDO DESPLAZABLE ====== */
+    .container { padding: 15px 20px 80px 20px; max-width: 1000px; margin: 0 auto; }
+    #trazabilidad-container { display: none; animation: fadeIn 0.4s; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+    .badge { padding: 4px 10px; border-radius: 4px; font-size: 10px; font-weight: bold; text-transform: uppercase; display: inline-block; }
+    .badge-conforme { background: #ecfdf5; color: #059669; border: 1px solid #10b981; }
+    .badge-noconforme { background: #fef2f2; color: #dc2626; border: 1px solid #ef4444; }
+
+    .segment-title { font-size: 14px; font-weight: 800; color: var(--azul-oscuro); margin-bottom: 10px; display: flex; align-items: center; gap: 6px; margin-top: 20px; }
+    .segment-title::before { content: ""; width: 4px; height: 14px; background: var(--lima); border-radius: 5px; }
+
+    .info-card { background: white; border: 1px solid #e1e5eb; border-radius: 6px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+    .grid-info { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; }
+    
+    .d-box { background: #f8f9fa; border: 1px solid #e1e5eb; padding: 10px 12px; border-radius: 6px; }
+    .d-box small { display: block; font-size: 10px; color: var(--gris); font-weight: 700; margin-bottom: 4px; text-transform: uppercase;}
+    .d-box span { font-size: 14px; color: var(--azul-oscuro); font-weight: 800; }
+
+    .tb-mini { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 11px; background: white;}
+    .tb-mini th { background: #f1f5f9; color: var(--azul-oscuro); padding: 8px; border: 1px solid #e1e5eb; text-align: center;} 
+    .tb-mini td { padding: 8px; border: 1px solid #e1e5eb; text-align: center; color: #374151; }
+
+    /* Recuadro de Aprobación Final */
+    .approval-box { background: #f0f9ff; border: 2px dashed var(--cian); border-radius: 8px; padding: 20px; margin-top: 30px; text-align: center; }
+    .approval-box h3 { margin: 0 0 15px 0; color: var(--azul-oscuro); font-size: 16px; text-transform: uppercase;}
+    .approval-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 15px; }
+    .obs-box { background: white; border: 1px solid #bae6fd; padding: 15px; border-radius: 6px; text-align: left; font-size: 12px; color: #333; min-height: 50px; font-style: italic;}
+    .uuid-box { background: var(--azul-oscuro); color: white; padding: 8px; border-radius: 4px; font-family: monospace; font-size: 12px; display: inline-block; margin-top: 15px; }
+
+    .footer { background: white; padding: 15px 25px; border-top: 1px solid #e1e5eb; display: flex; justify-content: center; position: fixed; bottom: 0; width: 100%; box-sizing: border-box; z-index: 200;}
+    .btn-cancelar { background: transparent; border: 1px solid var(--gris); color: var(--gris); padding: 10px 25px; border-radius: 5px; font-weight: bold; font-size: 12px; cursor: pointer; transition: 0.2s;}
+    .btn-cancelar:hover { background: #f1f5f9; color: var(--azul-oscuro); border-color: var(--azul-oscuro); }
+
+    #loader { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(255, 255, 255, 0.9); flex-direction: column; justify-content: center; align-items: center; z-index: 2000; }
+    .spinner { width: 40px; height: 40px; border-radius: 50%; border: 4px solid transparent; border-top-color: var(--azul-oscuro); border-right-color: var(--lima); border-bottom-color: var(--cian); border-left-color: var(--gris); animation: spin 0.9s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+  <div id="loader">
+    <div class="spinner"></div>
+    <p id="lblLoader" style="margin-top:15px; font-size:13px; font-weight:700; color:var(--azul-oscuro)">Cargando trazabilidad...</p>
+  </div>
+
+  <!-- ====== CABECERA ANCLADA (STICKY) ====== -->
+  <div class="sticky-wrapper">
+    <div class="header-thin">
+      <h1>Consulta de Registros y Trazabilidad</h1>
+    </div>
+    
+    <div class="action-bar">
+      <div class="search-area">
+        <label>Buscar número de control</label>
+        <div class="dropdown-container">
+          <input type="text" id="buscadorControl" placeholder="Digite el código o producto..." autocomplete="off" onfocus="mostrarOpciones()" oninput="filtrarOpciones()">
+          <span class="clear-btn" id="clearBtn" onclick="limpiarBuscador()">✖</span>
+          <span class="dropdown-chevron">▼</span>
+          <div class="dropdown-list" id="listaControles"></div>
+        </div>
+      </div>
+
+      <div id="sticky-sample-info" class="sample-info-sticky">
+        <div style="flex-grow:1;">
+          <div style="display:flex; align-items: center; gap: 12px; margin-bottom: 2px;">
+            <h2 id="lblControlVal">Control</h2>
+            <div id="lblBadgeVal"></div>
+          </div>
+          <p>
+            <strong style="color:var(--azul-oscuro)">Producto:</strong> <span id="lblProdVal"></span>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- CONTENEDOR DE TRAZABILIDAD -->
+    <div id="trazabilidad-container"></div>
+  </div>
+
+  <div class="footer">
+    <button class="btn-cancelar" onclick="google.script.host.close()">CERRAR CONSULTA</button>
+  </div>
+
+  <script>
+    let dbControles = [];
+    let chartsActivos = [];
+
+    window.onload = () => {
+      document.getElementById('loader').style.display = 'flex';
+      document.getElementById('lblLoader').innerText = "Cargando lista de controles...";
+      
+      google.script.run
+        .withSuccessHandler(res => {
+          dbControles = res;
+          poblarListaCombo();
+          document.getElementById('loader').style.display = 'none';
+        })
+        .withFailureHandler(err => { 
+          alert("Error cargando controles: " + err.message); 
+          document.getElementById('loader').style.display = 'none'; 
+        })
+        .obtenerListaControles();
+
+      document.addEventListener('click', e => {
+        if (!e.target.closest('.dropdown-container')) document.getElementById('listaControles').classList.remove('show');
+      });
+    };
+
+    function poblarListaCombo() {
+      const lista = document.getElementById('listaControles');
+      lista.innerHTML = '';
+      if(dbControles.length === 0) { lista.innerHTML = '<div class="no-results">No hay resultados registrados</div>'; return; }
+      
+      dbControles.forEach(item => {
+        let div = document.createElement('div');
+        div.className = 'dropdown-option';
+        div.innerText = item.texto;
+        div.onclick = () => { 
+          document.getElementById('buscadorControl').value = item.control; 
+          lista.classList.remove('show'); 
+          document.getElementById('clearBtn').style.display = 'block';
+          ejecutarConsulta(item.control); 
+        };
+        lista.appendChild(div);
+      });
+    }
+
+    function mostrarOpciones() { document.getElementById('listaControles').classList.add('show'); filtrarOpciones(); }
+
+    function filtrarOpciones() {
+      const val = document.getElementById('buscadorControl').value.toUpperCase();
+      const lista = document.getElementById('listaControles');
+      const ops = lista.getElementsByClassName('dropdown-option');
+      let vis = 0;
+      
+      for(let i=0; i<ops.length; i++) { 
+        if(ops[i].innerText.toUpperCase().indexOf(val) > -1) { ops[i].style.display = ""; vis++; } 
+        else { ops[i].style.display = "none"; }
+      }
+      
+      let nr = lista.querySelector('.no-results');
+      if(vis === 0 && ops.length > 0) { 
+        if(!nr) { nr = document.createElement('div'); nr.className='no-results'; nr.innerText='Sin coincidencias'; lista.appendChild(nr); } 
+      } else if(nr && vis > 0) { nr.remove(); }
+
+      document.getElementById('clearBtn').style.display = val ? 'block' : 'none';
+    }
+
+    function limpiarBuscador() {
+      const input = document.getElementById('buscadorControl');
+      input.value = ''; input.focus(); filtrarOpciones();
+      document.getElementById('trazabilidad-container').style.display = 'none';
+      document.getElementById('sticky-sample-info').style.display = 'none';
+    }
+
+    function ejecutarConsulta(control) {
+      document.getElementById('loader').style.display = 'flex';
+      document.getElementById('lblLoader').innerText = `Reconstruyendo trazabilidad para ${control}...`;
+      document.getElementById('trazabilidad-container').style.display = 'none';
+      document.getElementById('sticky-sample-info').style.display = 'none';
+
+      google.script.run
+        .withSuccessHandler(renderizarTrazabilidad)
+        .withFailureHandler(err => { document.getElementById('loader').style.display = 'none'; alert("Error: " + err.message); })
+        .obtenerTrazabilidadControl(control);
+    }
+
+    function renderizarTrazabilidad(data) {
+      const container = document.getElementById('trazabilidad-container');
+      container.innerHTML = '';
+      chartsActivos.forEach(c => c.destroy());
+      chartsActivos = [];
+      let html = '';
+
+      // INFO CABECERA
+      let ap = data.aprobacion;
+      let confBadge = "";
+      if (ap) {
+        confBadge = String(ap.conformidad).toUpperCase().includes('NO') 
+          ? `<span class="badge badge-noconforme" style="font-size:12px; padding:6px 12px;">Res. final: ${ap.conformidad}</span>` 
+          : `<span class="badge badge-conforme" style="font-size:12px; padding:6px 12px;">Res. final: ${ap.conformidad}</span>`;
+      }
+      document.getElementById('lblControlVal').innerText = data.control;
+      document.getElementById('lblBadgeVal').innerHTML = confBadge;
+      document.getElementById('lblProdVal').innerText = data.producto;
+      document.getElementById('sticky-sample-info').style.display = 'flex';
+
+      // IDENTIFICACIÓN EN LA ZONA SCROLLABLE
+      html += `
+        <div style="background: white; border-radius: 8px; border: 1px solid #e1e5eb; padding: 15px; margin-bottom: 20px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
+          <span style="font-size:11px; color:var(--gris); text-transform:uppercase; font-weight:bold;">Identificación reportada:</span><br>
+          <strong style="color:var(--azul-oscuro); font-size:14px; margin-top:4px; display:block;">${data.identificacion}</strong>
+        </div>
+      `;
+
+      // BLOQUES DE TRAZABILIDAD
+      data.bloques.forEach((bloque, bIdx) => {
+        if (data.bloques.length > 1) {
+          html += `<div style="background:var(--azul-oscuro); color:white; padding:10px 15px; border-radius:6px; margin-top:25px; margin-bottom:15px; font-weight:bold; font-size:13px; text-transform:uppercase;">Análisis del ${bloque.fecha}</div>`;
+        }
+
+        html += `<div class="segment-title">Segmento I: Verificación diaria del equipo</div>`;
+        if(bloque.equipoVerif) {
+          let v = bloque.equipoVerif;
+          let bClass = String(v.conf || "").toUpperCase().includes('NO') ? 'badge-noconforme' : 'badge-conforme';
+          let fHoraLabel = v.fHora ? v.fHora.substring(0,10) : "N/A"; 
+          html += `
+            <div class="info-card">
+              <div class="grid-info" style="margin-bottom:12px;">
+                <div class="d-box"><small>Fecha de análisis</small><span>${fHoraLabel}</span></div>
+                <div class="d-box"><small>Responsable</small><span style="font-size:12px;">${v.resp}</span></div>
+              </div>
+              <table class="tb-mini">
+                <tr><th>Estándar de yoduro</th><th>Solución ISA</th><th>Respuesta 1 mL [mV]</th><th>Respuesta 10 mL [mV]</th><th>Dif. (ΔmV)</th><th>Conformidad</th></tr>
+                <tr><td>${v.loteYod}</td><td>${v.loteIsa}</td><td>${v.resp1}</td><td>${v.resp10}</td><td><strong>${v.diff}</strong></td><td><span class="badge ${bClass}">${v.conf}</span></td></tr>
+              </table>
+            </div>
+          `;
+        } else {
+          html += `<div class="info-card" style="text-align:center; color:var(--error); font-style:italic;">No se encontró registro de Verificación 'Conforme' para esta fecha.</div>`;
+        }
+
+        html += `<div class="segment-title">Segmento II: Curva de calibración y resultados de muestras</div>`;
+        html += `<div style="background: #f8fafc; border:2px solid #cbd5e1; border-radius:8px; padding:18px; margin-bottom:20px;">`;
+
+        if (bloque.curvaData) {
+          let c = bloque.curvaData;
+          let canvasId = `chart_${bIdx}`;
+          
+          let tbNiveles = '';
+          if(c.niveles) {
+            c.niveles.forEach((n, iN) => { tbNiveles += `<tr><td>${n}</td><td>${c.conc[iN]}</td><td><span style="font-family:monospace; color:var(--gris);">${c.log[iN]}</span></td><td><strong>${c.mv[iN]}</strong></td></tr>`; });
+          }
+
+          html += `
+            <div style="margin-bottom: 30px;">
+              <strong style="font-size:14px; color:var(--azul-oscuro); display:block; margin-bottom:10px; border-bottom:1px solid #cbd5e1; padding-bottom:5px;">Datos de calibración (${bloque.nombreCurva})</strong>
+              
+              <table class="tb-mini" style="margin-bottom:10px;">
+                <tr><th>Balanza</th><th>Estándar madre</th><th>Peso KI [mg]</th><th>Balón std.</th></tr>
+                <tr><td>${c.balanza}</td><td>${c.loteYod}</td><td>${c.pesoKi}</td><td>${c.balonStd}</td></tr>
+              </table>
+              
+              <table class="tb-mini" style="margin-bottom:15px;">
+                <tr><th>Nivel</th><th>Conc. [ppm]</th><th>Log(Conc.)</th><th>Respuesta [mV]</th></tr>
+                ${tbNiveles}
+              </table>
+
+              <div style="background:white; border:1px solid #e1e5eb; border-radius:6px; padding:15px; display:flex; flex-direction:column; margin-top:20px;">
+                <div style="display:flex; justify-content:space-around; margin-bottom:15px; padding-bottom:10px; border-bottom:1px dashed #e1e5eb;">
+                  <span style="font-size:13px; color:var(--gris);">Pendiente (a): <strong style="color:#333">${c.a}</strong></span>
+                  <span style="font-size:13px; color:var(--gris);">Intercepto (b): <strong style="color:#333">${c.b}</strong></span>
+                  <span style="font-size:13px; color:var(--gris);">R²: <strong style="color:var(--azul-oscuro)">${c.r2}</strong></span>
+                  <span style="font-size:13px; color:var(--azul-oscuro); font-weight:bold;">y = ${c.a}x + ${String(c.b).includes('-') ? '' : '+'}${c.b}</span>
+                </div>
+                <div style="height:250px; width:100%; position:relative;"><canvas id="${canvasId}"></canvas></div>
+              </div>
+            </div>
+          `;
+
+          setTimeout(() => {
+            const ctx = document.getElementById(canvasId).getContext('2d');
+            let xData = [], yData = [];
+            let mvBlanco = 0;
+            if (c.mv && c.mv.length > 0) { mvBlanco = parseFloat(String(c.mv[0]).replace(',','.')); if (isNaN(mvBlanco)) mvBlanco = 0; }
+            if(c.log) {
+              c.log.forEach((lx, j) => { 
+                if(lx !== "NA" && lx !== "N/A" && lx !== "") { 
+                  let xVal = parseFloat(String(lx).replace(',','.')); let yValDirecto = parseFloat(String(c.mv[j]).replace(',','.'));
+                  if (!isNaN(xVal) && !isNaN(yValDirecto)) { xData.push(xVal); yData.push(yValDirecto - mvBlanco); }
+                } 
+              });
+            }
+            let aNum = parseFloat(String(c.a).replace(',','.')); let bNum = parseFloat(String(c.b).replace(',','.'));
+            let lineData = [];
+            if(xData.length > 0 && !isNaN(aNum) && !isNaN(bNum)) lineData = [ {x: Math.min(...xData), y: (aNum * Math.min(...xData) + bNum)}, {x: Math.max(...xData), y: (aNum * Math.max(...xData) + bNum)} ];
+
+            let chart = new Chart(ctx, { type: 'scatter', data: { datasets: [{ label: 'Lectura Corregida', data: xData.map((x,k)=>({x:x, y:yData[k]})), backgroundColor: '#0a4079', pointRadius: 6 }, { label: 'Tendencia', data: lineData, type: 'line', borderColor: '#afcc46', borderWidth: 2, fill: false, pointRadius: 0 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { type: 'linear', title: { display: true, text: 'Log(Concentración)', color: '#6b7280', font: {size:12, weight:'bold'} } }, y: { title: { display: true, text: 'Lectura Corregida [mV]', color: '#6b7280', font: {size:12, weight:'bold'} } } } } });
+            chartsActivos.push(chart);
+          }, 150);
+        } else {
+            html += `<div style="margin-bottom: 25px;"><strong style="font-size:14px; color:var(--error); display:block; margin-bottom:10px; border-bottom:1px solid #cbd5e1; padding-bottom:5px;">Datos de calibración (${bloque.nombreCurva})</strong><p style="color:var(--gris); font-size: 12px; font-style:italic;">No se pudo recuperar la curva de calibración.</p></div>`;
+        }
+
+        let tiposOrdenados = Object.keys(bloque.ensayos).sort((a, b) => {
+          if (a.toLowerCase() === 'rutina') return -1; if (b.toLowerCase() === 'rutina') return 1; return a.localeCompare(b);
+        });
+
+        tiposOrdenados.forEach(tipo => {
+          let ensayo = bloque.ensayos[tipo];
+          let colorTitulo = tipo.toLowerCase() === 'rutina' ? 'var(--azul-oscuro)' : '#059669';
+
+          html += `<div style="margin-top:20px;">`;
+          html += `<strong style="font-size:14px; color:${colorTitulo}; display:block; margin-bottom:10px; padding-bottom:5px; border-bottom: 1px dashed ${colorTitulo};">Resultados de muestra (${tipo})</strong>`;
+
+          let tbReps = '';
+          if(ensayo.replicas) {
+            ensayo.replicas.forEach(rp => { tbReps += `<tr><td>Rep ${rp.rep}</td><td>${rp.peso}</td><td>${rp.balanza}</td><td>${rp.loteIsa}</td><td>${rp.mv}</td><td><strong style="color:var(--azul-oscuro); font-size:13px;">${rp.mgkg}</strong></td></tr>`; });
+          }
+
+          html += `<table class="tb-mini"><tr><th>Réplica</th><th>Peso de muestra [g]</th><th>Balanza</th><th>Lote ISA</th><th>Lectura [mV]</th><th>Concentración [mg/kg]</th></tr>${tbReps}</table>`;
+
+          if (ensayo.duplicadoData) {
+            let d = ensayo.duplicadoData;
+            let hrStr = String(d.horrat).replace(',','.');
+            let confHor = parseFloat(hrStr) <= 1.3 ? '<span class="badge badge-conforme" style="margin-top:8px;">Cumple</span>' : '<span class="badge badge-noconforme" style="margin-top:8px;">No cumple</span>';
+            
+            let confPromHTML = "";
+            if (String(d.confProm).toUpperCase() === 'CUMPLE') confPromHTML = '<span class="badge badge-conforme" style="margin-top:8px;">Cumple</span>';
+            else if (String(d.confProm).toUpperCase() === 'NO CUMPLE') confPromHTML = '<span class="badge badge-noconforme" style="margin-top:8px;">No cumple</span>';
+
+            html += `
+              <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-top: 15px;">
+                <div class="d-box" style="display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center;">
+                  <small style="width:100%;">Promedio [mg/kg]</small>
+                  <span style="font-size:22px;">${d.prom}</span>
+                  ${confPromHTML}
+                </div>
+                <div class="d-box" style="display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center;">
+                  <small style="width:100%;">RSD(r) [%]</small>
+                  <span style="font-size:22px; color:#374151; margin-bottom:5px;">${d.rsdr}</span>
+                </div>
+                <div class="d-box" style="display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center;">
+                  <small style="width:100%;">PRSD(R) [%]</small>
+                  <span style="font-size:22px; color:#374151; margin-bottom:5px;">${d.prsdr}</span>
+                </div>
+                <div class="d-box" style="display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center;">
+                  <small style="width:100%;">HorRat(r)</small>
+                  <span style="font-size:22px; color:#374151; line-height:1;">${d.horrat}</span>
+                  ${confHor}
+                </div>
+              </div>
+            `;
+          }
+          html += `</div>`; 
+        });
+        html += `</div>`; 
+      });
+
+      // ================= CERRANDO CON LOS DATOS DE APROBACIÓN =================
+      if(ap && ap.fechaRev && ap.fechaRev !== "Pendiente" && ap.fechaRev !== "") {
+        html += `
+          <div class="approval-box">
+            <h3>🛡️ Auditoría y aprobación</h3>
+            <div class="approval-grid">
+              <div class="d-box" style="background:white; text-align:center;"><small>Fecha de aprobación</small><span>${ap.fechaRev}</span></div>
+              <div class="d-box" style="background:white; text-align:center;"><small>Líder que autoriza</small><span style="font-size:12px;">${ap.responsableRev}</span></div>
+              <div class="d-box" style="background:white; text-align:center;"><small>Analista reportante</small><span style="font-size:12px;">${data.analista}</span></div>
+            </div>
+            <div class="obs-box"><strong>Observaciones del líder:</strong><br><span style="color:#6b7280; font-size: 13px; display:block; margin-top:5px;">${ap.observaciones}</span></div>
+            <div class="uuid-box">UUID: ${ap.uuid}</div>
+          </div>
+        `;
+      } else {
+        html += `
+          <div class="approval-box" style="background:#fffbeb; border-color:#fde68a;">
+            <h3 style="color:#d97706; margin-bottom:0;">⏳ Aprobación pendiente</h3>
+            <p style="font-size:12px; color:#92400e; margin-top:8px; margin-bottom:0;">Este registro aún no ha sido revisado ni firmado por el líder de área.</p>
+          </div>
+        `;
+      }
+
+      container.innerHTML = html;
+      container.style.display = 'block';
+      document.getElementById('loader').style.display = 'none';
+    }
+  </script>
+</body>
+</html>

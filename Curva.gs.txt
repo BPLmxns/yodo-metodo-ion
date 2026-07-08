@@ -1,0 +1,206 @@
+// ====================================================================
+// Curva.gs
+// ====================================================================
+
+// --- 🔍 CONSULTAS LOCALES ---
+
+function registrarCurva() {
+  const status = verificarEquipoCurva("MFPH-006"); 
+  if (status.estado === "Sin registro de hoy") return { estado: "ALERTA_VERIFICACION", mensaje: "Debe realizar la verificación diaria del equipo antes de calibrar." };
+  if (status.estado === "NO CONFORME") return { estado: "ALERTA_VERIFICACION", mensaje: "La verificación del equipo resultó 'No conforme'. Realice una nueva verificación y asegure su conformidad." };
+  
+  iniciarFormularioCurva();
+  return { estado: "OK", mensaje: "Verificación conforme. Abriendo formulario..." };
+}
+
+function iniciarFormularioCurva() {
+  const html = HtmlService.createHtmlOutputFromFile('form_Curva').setWidth(850).setHeight(720); 
+  SpreadsheetApp.getUi().showModalDialog(html, ' ');
+}
+
+function obtenerDatosInicialesCurva() {
+  const datos = { lotesYoduro: [], micropipetas: [], pipetas: [], pipetas5mL: [], balones: [], equiposPh: [{codigo: "MFPH-006", area: "Materias Primas"}] };
+  try {
+    const ssSoluciones = SpreadsheetApp.openById(CONFIG.SOLUCIONES.ID);
+    const hojaTrazabilidad = ssSoluciones.getSheetByName(CONFIG.SOLUCIONES.HOJAS.TRAZABILIDAD);
+    if (hojaTrazabilidad && hojaTrazabilidad.getLastRow() > 6) {
+      const infoTraz = hojaTrazabilidad.getRange(7, 1, hojaTrazabilidad.getLastRow() - 6, 19).getValues();
+      const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+      infoTraz.forEach(fila => {
+        const codigo = fila[0]; const nombre = String(fila[4]).trim().toUpperCase().replace(/\s+/g, ' ');
+        const concentracion = String(fila[5]).trim(); const estado = String(fila[12]).trim().toUpperCase(); const fechaVenc = fila[18];
+        let estaVigente = false;
+        if (fechaVenc) {
+          let fVenc = (fechaVenc instanceof Date) ? fechaVenc : new Date(fechaVenc.toString().replace(/-/g, '\/'));
+          if (!isNaN(fVenc.getTime())) { fVenc.setHours(0, 0, 0, 0); if (fVenc.getTime() >= hoy.getTime()) estaVigente = true; }
+        }
+        if (estaVigente && (estado === "EN PREPARACIÓN" || estado === "FINALIZADO") && nombre === "ESTANDAR DE YODURO" && (concentracion === "1000 ppm" || concentracion === "1000")) datos.lotesYoduro.push(codigo);
+      });
+    }
+
+    const ssMicro = SpreadsheetApp.openById(CONFIG.MICROPIPETAS.ID);
+    const hojaMicro = ssMicro.getSheetByName(CONFIG.MICROPIPETAS.HOJAS.MATRIZ);
+    if (hojaMicro && hojaMicro.getLastRow() >= 4) {
+      hojaMicro.getRange(4, 8, hojaMicro.getLastRow() - 3, 1).getValues().forEach(r => { if (r[0]) datos.micropipetas.push(String(r[0]).trim()); });
+    }
+
+    const ssInv = SpreadsheetApp.openById(CONFIG.INVENTARIO.ID);
+    const hojaInv = ssInv.getSheetByName(CONFIG.INVENTARIO.HOJAS.MATERIAL);
+    if (hojaInv && hojaInv.getLastRow() >= 6) {
+      hojaInv.getRange(6, 1, hojaInv.getLastRow() - 5, 15).getValues().forEach(fila => {
+        const codigo = String(fila[0]).trim(); const material = String(fila[1]).trim();
+        const volumen = parseFloat(String(fila[5]).replace(',', '.')); const estado = String(fila[14]).trim(); 
+        if (codigo && estado !== "Caducado" && estado !== "No cumple") {
+          if (material === "Pipeta aforada") { datos.pipetas.push(codigo); if (volumen === 5) datos.pipetas5mL.push(codigo); } 
+          else if ((material === "Balón aforado, cuello angosto" || material === "Balón aforado, cuello ancho") && volumen === 100) datos.balones.push(codigo);
+        }
+      });
+    }
+    return datos;
+  } catch (e) { throw new Error("Error cargando datos base: " + e.message); }
+}
+
+function obtenerDetallesLote(codigoLote) {
+  try {
+    const ssSoluciones = SpreadsheetApp.openById(CONFIG.SOLUCIONES.ID);
+    const hoja = ssSoluciones.getSheetByName(CONFIG.SOLUCIONES.HOJAS.TRAZABILIDAD);
+    const lastRow = hoja.getLastRow();
+    if (lastRow <= 6) throw new Error("Hoja de trazabilidad sin registros.");
+
+    const datos = hoja.getRange(7, 1, lastRow - 6, 18).getValues(); 
+    const filaLote = datos.find(r => r[0] === codigoLote);
+    if (!filaLote) throw new Error("No se encontró el lote especificado.");
+
+    const sustancias = String(filaLote[14]).split(';').map(s => s.trim().toUpperCase());
+    const cantidades = String(filaLote[16]).split(';').map(s => s.trim());
+    const instrumental = String(filaLote[17]).split(';').map(s => s.trim()); 
+
+    const idxKI = sustancias.findIndex(s => s.includes("YODURO DE POTASIO"));
+    let pesoKI = 0;
+    let balanzaKI = "No especificada"; 
+    
+    if (idxKI !== -1) { 
+      if (cantidades[idxKI]) { 
+        const match = cantidades[idxKI].match(/[\d,.]+/); 
+        if (match) pesoKI = parseFloat(match[0].replace(',', '.')); 
+      }
+      if (instrumental[idxKI]) {
+        balanzaKI = instrumental[idxKI].trim();
+      }
+    }
+
+    const idxAgua = sustancias.findIndex(s => s.includes("AGUA PURIFICADA"));
+    let volAgua = 100; let balonAgua = "No especificado";
+    if (idxAgua !== -1) {
+      if (cantidades[idxAgua]) {
+        const matchParen = cantidades[idxAgua].match(/\(([\d,.]+)/);
+        if (matchParen) volAgua = parseFloat(matchParen[1].replace(',', '.'));
+        else { const matchNum = cantidades[idxAgua].match(/[\d,.]+/); if (matchNum) volAgua = parseFloat(matchNum[0].replace(',', '.')); }
+      }
+      if (instrumental[idxAgua]) balonAgua = instrumental[idxAgua];
+    }
+    
+    return { pesoKI: pesoKI, balanzaKI: balanzaKI, volumenAgua: volAgua, balonInstrumental: balonAgua };
+  } catch (error) { throw new Error(error.message); }
+}
+
+function verificarEquipoCurva(codigoEquipo) {
+  try {
+    const ss = SpreadsheetApp.openById(CONFIG.EQUIPO_PH.ID);
+    const hoja = ss.getSheetByName(CONFIG.EQUIPO_PH.HOJAS.VERIFICACION);
+    if (!hoja) return { estado: "Sin hoja de Verificación", color: "var(--gris)" };
+
+    const lastRow = hoja.getLastRow();
+    if (lastRow < 6) return { estado: "Sin registro de hoy", color: "var(--gris)" };
+
+    const datos = hoja.getRange(6, 1, lastRow - 5, 7).getValues();
+    const zonaStr = Session.getScriptTimeZone();
+    const hoyStr = Utilities.formatDate(new Date(), zonaStr, "yyyy-MM-dd");
+
+    let registrosHoy =[];
+    datos.forEach(fila => {
+      let fechaCell = fila[0];
+      if (fechaCell) {
+        let filaStr = (fechaCell instanceof Date) ? Utilities.formatDate(fechaCell, zonaStr, "yyyy-MM-dd") : fechaCell.toString().substring(0, 10);
+        if (filaStr === hoyStr) registrosHoy.push(String(fila[6]).toUpperCase()); 
+      }
+    });
+
+    if (registrosHoy.length === 0) return { estado: "Sin registro de hoy", color: "var(--gris)" };
+    if (registrosHoy.includes("CONFORME")) return { estado: "CONFORME", color: "var(--success)" };
+    else return { estado: "NO CONFORME", color: "var(--error)" };
+  } catch (e) { return { estado: "Error de conexión", color: "var(--error)" }; }
+}
+
+// --- 🚀 PUENTE PARA ESCRITURA (CORREGIDO) ---
+
+function guardarCurva(datos) {
+  const usuario = Session.getActiveUser().getEmail();
+  const payload = { accion: "guardarCurva", datos: datos, usuario: usuario };
+  
+  let opcionesPost = {
+    method: "post",
+    contentType: "application/json",
+    headers: { "Authorization": "Bearer " + ScriptApp.getOAuthToken() },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true,
+    followRedirects: false 
+  };
+  
+  let resp = UrlFetchApp.fetch(CONFIG.WEB_APP_URL, opcionesPost);
+  
+  if (resp.getResponseCode() === 302 || resp.getResponseCode() === 303 || resp.getResponseCode() === 307) {
+    const nuevaUrl = resp.getHeaders()['Location'];
+    
+    let opcionesGet = {
+      method: "get",
+      headers: { "Authorization": "Bearer " + ScriptApp.getOAuthToken() },
+      muteHttpExceptions: true
+    };
+    resp = UrlFetchApp.fetch(nuevaUrl, opcionesGet);
+  }
+  
+  const textoRespuesta = resp.getContentText();
+  
+  if (textoRespuesta.trim().toLowerCase().startsWith("<!doctype")) {
+    throw new Error("Error del servidor de Google al retornar los datos. La operación posiblemente se guardó.");
+  }
+  
+  const resultado = JSON.parse(textoRespuesta);
+  if (!resultado.exito) throw new Error(resultado.error);
+  
+  return resultado.datos;
+}
+
+// --- 🔐 LÓGICA REAL DE ESCRITURA (En la Web App) ---
+
+function ejecutarLogicaGuardarCurva(datos, usuario) {
+  try {
+    const ss = SpreadsheetApp.openById(CONFIG.APP_YODO.ID);
+    const hoja = ss.getSheetByName(CONFIG.APP_YODO.HOJAS.CURVA);
+    if (!hoja) throw new Error("No se encontró la hoja 'Curva de Calibración'.");
+
+    const fechaObj = new Date();
+    const aComa = (val) => val ? val.toString().replace('.', ',') : "";
+    const formatearLista = (arr) => arr.map(item => aComa(item)).join(';\n') + '.';
+
+    const fila = [
+      fechaObj, datos.balanza, datos.loteYoduro, aComa(datos.pesoKi), datos.balonStd, aComa(datos.concStd),
+      datos.instIntFormat, datos.balonInt, aComa(datos.concInt), formatearLista(datos.nivelesNombres),
+      formatearLista(datos.nivelesInst), formatearLista(datos.nivelesAlicuota), formatearLista(datos.nivelesConc),
+      formatearLista(datos.nivelesLog), datos.eqPh, datos.eqVerificacion, formatearLista(datos.nivelesMv),
+      aComa(datos.a), aComa(datos.b), aComa(datos.r2), datos.conformidad, usuario, "", ""
+    ];
+
+    hoja.appendRow(fila);
+    const ultimaFila = hoja.getLastRow();
+
+    hoja.getRange(ultimaFila, 10, 1, 8).setWrap(true);
+
+    const celdaConf = hoja.getRange(ultimaFila, 21);
+    if (datos.conformidad.toUpperCase().includes('NO CUMPLE')) celdaConf.setBackground('#fef2f2').setFontColor('#dc2626').setFontWeight('bold');
+    else celdaConf.setBackground('#ecfdf5').setFontColor('#059669').setFontWeight('bold');
+
+    return "Curva de Calibración guardada exitosamente.";
+  } catch (error) { throw new Error(error.message); }
+}

@@ -1,0 +1,412 @@
+// ====================================================================
+// Aprobacion.gs (Ejecutado nativamente en el entorno Web App)
+// ====================================================================
+
+function obtenerDatosAprobacion() {
+  const payload = [];
+
+  try {
+    const ssYodo = SpreadsheetApp.openById(CONFIG.APP_YODO.ID);
+    const ssPh = SpreadsheetApp.openById(CONFIG.EQUIPO_PH.ID);
+    
+    const hojaRep = ssYodo.getSheetByName(CONFIG.APP_YODO.HOJAS.REPORTE);
+    const hojaVerif = ssPh.getSheetByName(CONFIG.EQUIPO_PH.HOJAS.VERIFICACION);
+    const hojaRes = ssYodo.getSheetByName(CONFIG.APP_YODO.HOJAS.RESULTADOS);
+    const hojaCurva = ssYodo.getSheetByName(CONFIG.APP_YODO.HOJAS.CURVA);
+    const hojaDup = ssYodo.getSheetByName(CONFIG.APP_YODO.HOJAS.DUPLICADOS);
+
+    const dataRep = hojaRep.getRange(6, 1, Math.max(1, hojaRep.getLastRow() - 5), 16).getValues();
+    const dataVerif = hojaVerif.getRange(6, 1, Math.max(1, hojaVerif.getLastRow() - 5), 8).getValues();
+    const dataRes = hojaRes.getRange(7, 1, Math.max(1, hojaRes.getLastRow() - 6), 21).getValues();
+    const dataCurva = hojaCurva.getRange(7, 1, Math.max(1, hojaCurva.getLastRow() - 6), 22).getValues();
+    const dataDup = hojaDup.getRange(8, 1, Math.max(1, hojaDup.getLastRow() - 7), 15).getValues();
+
+    const extractDate = (val) => {
+      if (!val) return "";
+      if (val instanceof Date) return Utilities.formatDate(val, Session.getScriptTimeZone(), "yyyy-MM-dd");
+      return String(val).substring(0, 10);
+    };
+
+    // 1. Recorrer Reporte Analítico buscando pendientes
+    dataRep.forEach((r, index) => {
+      const ctrl = String(r[0]).trim();
+      const firmaLider = String(r[14]).trim(); 
+
+      if (ctrl !== "" && firmaLider === "") {
+        let fAnaRaw = r[5];
+        let fAnaStr = (fAnaRaw instanceof Date) ? Utilities.formatDate(fAnaRaw, Session.getScriptTimeZone(), "yyyy-MM-dd") : String(fAnaRaw).substring(0, 10);
+
+        let item = {
+          filaReal: index + 6, control: ctrl, fechaRecep: extractDate(r[1]), producto: r[2], identificacion: r[3],
+          fechaAnalisis: fAnaStr, promedio: r[6], unidad: r[7], especificacion: r[8], conformidad: r[9], ac: r[10], analista: r[12], bloques: [] 
+        };
+
+        let bloquesMap = {};
+        const resultadosCtrl = dataRes.filter(res => String(res[1]).trim() === ctrl);
+
+        resultadosCtrl.forEach(res => {
+          let fAnaRes = extractDate(res[0]);
+          let nombreCurva = String(res[14]).trim();
+          let tipo = String(res[3]).trim();
+          let blockKey = fAnaRes + "_" + nombreCurva;
+
+          if (!bloquesMap[blockKey]) {
+            let verifEncontrada = null;
+            dataVerif.forEach(v => {
+              let fvStr = extractDate(v[0]);
+              if (fvStr === fAnaRes && String(v[6]).toUpperCase().includes("CONFORME")) {
+                let fHoraTexto = (v[0] instanceof Date) ? Utilities.formatDate(v[0], Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm") : String(v[0]);
+                verifEncontrada = { fHora: fHoraTexto, loteYod: v[1], loteIsa: v[2], resp1: v[3], resp10: v[4], diff: v[5], conf: v[6], resp: v[7] };
+              }
+            });
+
+            let curvaEncontrada = null;
+            dataCurva.forEach(c => {
+              let fcStr = extractDate(c[0]);
+              if (fcStr === fAnaRes) {
+                let chStr = (c[0] instanceof Date) ? Utilities.formatDate(c[0], Session.getScriptTimeZone(), "HH:mm") : String(c[0]).substring(13,18);
+                let n = `Curva ${chStr} (R²: ${c[19]})`;
+                if (n === nombreCurva) {
+                  const limpiar = (str) => String(str).replace(/\.$/, '').split(';\n');
+                  let cHoraTexto = (c[0] instanceof Date) ? Utilities.formatDate(c[0], Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm") : String(c[0]);
+                  curvaEncontrada = {
+                    fHora: cHoraTexto, balanza: c[1], loteYod: c[2], pesoKi: c[3], balonStd: c[4], concStd: c[5],
+                    instInt: c[6], balonInt: c[7], concInt: c[8], eqPh: c[14], eqVerif: c[15], a: c[17], b: c[18], r2: c[19], conf: c[20], resp: c[21],
+                    niveles: limpiar(c[9]), insts: limpiar(c[10]), alis: limpiar(c[11]), conc: limpiar(c[12]), log: limpiar(c[13]), mv: limpiar(c[16])
+                  };
+                }
+              }
+            });
+
+            bloquesMap[blockKey] = { fecha: fAnaRes, nombreCurva: nombreCurva, equipoVerif: verifEncontrada, curvaData: curvaEncontrada, ensayos: {} };
+          }
+
+          if (!bloquesMap[blockKey].ensayos[tipo]) {
+            let dupData = null;
+            let infVal = String(res[17]).trim(); let supVal = String(res[18]).trim(); 
+            const dupEncontrado = dataDup.find(dup => String(dup[1]).trim() === ctrl && String(dup[2]).trim() === tipo);
+            if (dupEncontrado) {
+              let prom = dupEncontrado[10]; let confProm = "No aplica";
+              if (infVal.toUpperCase() !== "NO APLICA" && infVal !== "NA" && infVal !== "") {
+                let pVal = parseFloat(String(prom).replace(',', '.')); let iVal = parseFloat(infVal.replace(',', '.')); let sVal = parseFloat(supVal.replace(',', '.'));
+                if (!isNaN(pVal) && !isNaN(iVal) && !isNaN(sVal)) confProm = (pVal >= iVal && pVal <= sVal) ? "Cumple" : "No cumple";
+              }
+              dupData = { prom: prom, rsdr: dupEncontrado[11], prsdr: dupEncontrado[12], horrat: dupEncontrado[13], confProm: confProm };
+            }
+            bloquesMap[blockKey].ensayos[tipo] = { tipo: tipo, inf: infVal, sup: supVal, duplicadoData: dupData, replicas: [] };
+          }
+
+          bloquesMap[blockKey].ensayos[tipo].replicas.push({
+            rep: res[2], balanza: res[6], peso: res[7], balonM: res[8], pipeta: res[9], balonD: res[10], loteIsa: res[13], mv: res[15], mgkg: res[16]
+          });
+        });
+
+        item.bloques = Object.values(bloquesMap).sort((a, b) => {
+          let aHasR = a.ensayos['Rutina'] ? 1 : 0; let bHasR = b.ensayos['Rutina'] ? 1 : 0;
+          if (aHasR !== bHasR) return bHasR - aHasR; return a.fecha.localeCompare(b.fecha); 
+        });
+
+        payload.push(item);
+      }
+    });
+
+    return payload;
+  } catch (e) { throw new Error("Error extrayendo trazabilidad: " + e.message); }
+}
+
+// ====================================================================
+// 🔐 LÓGICA DE PDF Y ESCRITURA EN HOJAS (NATIVA, SIN PUENTE HTTP)
+// ====================================================================
+
+function ejecutarLogicaFirmarAprobacionLider(datos, usuario) {
+  try {
+    const ctrlData = datos.ctrlData;
+    const observaciones = datos.observaciones || "No aplica";
+    const control = ctrlData.control;
+    // ⚠️ Al ser Web App (executeAs: USER_DEPLOYING), atrapa el correo del líder logueado en la página
+    const emailLider = Session.getActiveUser().getEmail(); 
+    const emailAnalista = ctrlData.analista;
+    
+    const hoy = new Date();
+    const hoyCorto = Utilities.formatDate(hoy, Session.getScriptTimeZone(), "yyyy-MM-dd");
+    const hoyLargo = Utilities.formatDate(hoy, Session.getScriptTimeZone(), "yyyy-MM-dd - HH:mm");
+    const uuid = Utilities.getUuid(); 
+
+    // --- 1. OBTENER CARGOS DE LA BD ---
+    let cargoAnalista = "Analista", cargoLider = "Líder de Área";
+    try {
+      const ssUsers = SpreadsheetApp.openById(CONFIG.CREDENCIALES.ID);
+      const hUsers = ssUsers.getSheetByName(CONFIG.CREDENCIALES.HOJAS.USERS);
+      const dUsers = hUsers.getRange(6, 1, hUsers.getLastRow() - 5, 6).getValues();
+      dUsers.forEach(u => {
+        let e = String(u[5]).toLowerCase().trim(); let c = String(u[3]).trim();
+        if (e === emailAnalista.toLowerCase().trim()) cargoAnalista = c;
+        if (e === emailLider.toLowerCase().trim()) cargoLider = c;
+      });
+    } catch(e) { Logger.log("Cargos por defecto aplicados."); }
+
+    // --- 2. DETERMINAR TIPO DE REPORTE (T1, T2, T3) ---
+    let tipoReporte = "Reporte T1";
+    let b1 = ctrlData.bloques[0];
+    let b2 = ctrlData.bloques.length > 1 ? ctrlData.bloques[1] : null;
+
+    if (ctrlData.bloques.length === 1) {
+      if (b1.ensayos['Verificación']) tipoReporte = "Reporte T2";
+    } else {
+      tipoReporte = "Reporte T3";
+    }
+
+    // --- 3. GENERAR CLON TEMPORAL Y LLENAR PDF ---
+    const ID_PLANTILLA = "1TsymdN90TmMbpAVskKpBGUbIc5XXdV2EVrESkDw2gh0";
+    const ID_CARPETA = "12dsxtLgjUvtjAKMNj-pmaawaJrNW8fV1";
+
+    const archivoTemp = DriveApp.getFileById(ID_PLANTILLA).makeCopy("Temp_PDF_" + control);
+    const ssTemp = SpreadsheetApp.openById(archivoTemp.getId());
+
+    ssTemp.getSheets().forEach(s => { if(s.getName() !== tipoReporte) ssTemp.deleteSheet(s); });
+    const hoja = ssTemp.getSheetByName(tipoReporte);
+
+    const aComa = (v) => { if (!v || String(v).toLowerCase().includes("no aplica")) return "No aplica"; return String(v).replace(/\./g, ','); };
+    
+    // FORMATO DE ECUACIÓN MATEMÁTICA (y = ax - b)
+    const eqMatematica = (a, b) => {
+      let bNum = parseFloat(String(b).replace(',', '.'));
+      if (isNaN(bNum)) return `y = ${aComa(a)}x + ${aComa(b)}`;
+      return bNum < 0 ? `y = ${aComa(a)}x - ${aComa(Math.abs(bNum))}` : `y = ${aComa(a)}x + ${aComa(bNum)}`;
+    };
+
+    // LLENADO CABECERA COMÚN
+    hoja.getRange("B5").setValue(control);
+    hoja.getRange("B7").setValue(ctrlData.producto);
+    hoja.getRange("B8").setValue(ctrlData.identificacion);
+
+    // FUNCIÓN DE LLENADO DE BLOQUE DINÁMICO
+    const llenarBloque = (bloque, startRow, isT3Verif = false) => {
+      let off = 0;
+      if (!bloque) return off;
+
+      // Verificación de equipo
+      if (bloque.equipoVerif) {
+        hoja.getRange(isT3Verif ? 60 : 12, 2).setValue(bloque.equipoVerif.fHora.substring(0, 10)); // B12 / B60
+        hoja.getRange(isT3Verif ? 60 : 12, 4).setValue(bloque.equipoVerif.resp); // D12 / D60
+        hoja.getRange(isT3Verif ? 62 : 14, 1).setValue(bloque.equipoVerif.loteYod); // A14 / A62
+        hoja.getRange(isT3Verif ? 62 : 14, 2).setValue(bloque.equipoVerif.loteIsa); // B14 / B62
+        hoja.getRange(isT3Verif ? 62 : 14, 3).setValue(aComa(bloque.equipoVerif.resp1)); // C14 / C62
+        hoja.getRange(isT3Verif ? 62 : 14, 4).setValue(aComa(bloque.equipoVerif.resp10)); // D14 / D62
+        hoja.getRange(isT3Verif ? 62 : 14, 5).setValue(aComa(bloque.equipoVerif.diff)); // E14 / E62
+        hoja.getRange(isT3Verif ? 62 : 14, 6).setValue(bloque.equipoVerif.conf); // F14 / F62
+      }
+
+      // Datos de Curva
+      let rC = isT3Verif ? 68 : 20;
+      if (bloque.curvaData) {
+        let c = bloque.curvaData;
+        hoja.getRange(rC, 2).setValue(c.balanza); hoja.getRange(rC, 3).setValue(c.loteYod); hoja.getRange(rC, 4).setValue(aComa(c.pesoKi));
+        hoja.getRange(rC, 5).setValue(c.balonStd); hoja.getRange(rC, 6).setValue(aComa(c.concStd));
+        hoja.getRange(rC+2, 2).setValue(5); hoja.getRange(rC+2, 3).setValue(c.instInt); hoja.getRange(rC+2, 4).setValue(c.balonInt); hoja.getRange(rC+2, 5).setValue(aComa(c.concInt));
+
+        let lenNiveles = c.niveles.length;
+        off = Math.max(0, lenNiveles - 6);
+        let rStartNivel = isT3Verif ? 74 : 26;
+
+        if (off > 0) {
+          hoja.insertRowsAfter(rStartNivel + 5, off);
+          hoja.getRange(rStartNivel + 5, 1, 1, 6).copyTo(hoja.getRange(rStartNivel + 6, 1, off, 6), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+        }
+
+        c.niveles.forEach((n, i) => {
+          let currR = rStartNivel + i;
+          hoja.getRange(currR, 1).setValue(n);
+          hoja.getRange(currR, 2).setValue(c.insts[i] || "NA");
+          hoja.getRange(currR, 3).setValue(aComa(c.alis[i] || "NA"));
+          hoja.getRange(currR, 4).setValue(aComa(c.conc[i]));
+          hoja.getRange(currR, 5).setValue(aComa(c.log[i]));
+          hoja.getRange(currR, 6).setValue(aComa(c.mv[i]));
+        });
+
+        hoja.getRange(isT3Verif ? 83+off : 35+off, 1).setValue(aComa(c.a));
+        hoja.getRange(isT3Verif ? 83+off : 35+off, 2).setValue(aComa(c.b));
+        hoja.getRange(isT3Verif ? 83+off : 35+off, 3).setValue(eqMatematica(c.a, c.b));
+      }
+
+      return off;
+    };
+
+    let offset1 = llenarBloque(b1, 0, false);
+    
+    // LLENADO RESULTADOS (Rutina)
+    let rut = b1.ensayos['Rutina'];
+    if (rut) {
+      hoja.getRange(35+offset1, 5).setValue(aComa(rut.replicas[0].peso)); hoja.getRange(35+offset1, 6).setValue(aComa(rut.replicas[1].peso));
+      hoja.getRange(36+offset1, 5).setValue(rut.replicas[0].balanza); hoja.getRange(36+offset1, 6).setValue(rut.replicas[1].balanza);
+      hoja.getRange(37+offset1, 5).setValue(rut.replicas[0].loteIsa); hoja.getRange(37+offset1, 6).setValue(rut.replicas[1].loteIsa);
+      hoja.getRange(38+offset1, 5).setValue(aComa(rut.replicas[0].mv)); hoja.getRange(38+offset1, 6).setValue(aComa(rut.replicas[1].mv));
+      hoja.getRange(39+offset1, 5).setValue(aComa(rut.replicas[0].mgkg)); hoja.getRange(39+offset1, 6).setValue(aComa(rut.replicas[1].mgkg));
+
+      if (rut.duplicadoData) {
+        hoja.getRange(41+offset1, 5).setValue(aComa(rut.duplicadoData.prom));
+        hoja.getRange(42+offset1, 5).setValue(aComa(rut.duplicadoData.rsdr));
+        hoja.getRange(43+offset1, 5).setValue(aComa(rut.duplicadoData.prsdr));
+        hoja.getRange(44+offset1, 5).setValue(aComa(rut.duplicadoData.horrat));
+      }
+    }
+
+    if (tipoReporte === "Reporte T1") {
+      hoja.getRange(47+offset1, 4).setValue(observaciones);
+      hoja.getRange(53+offset1, 2).setValue(emailAnalista); hoja.getRange(54+offset1, 2).setValue(cargoAnalista); hoja.getRange(55+offset1, 2).setValue(hoyCorto);
+      hoja.getRange(53+offset1, 5).setValue(emailLider); hoja.getRange(54+offset1, 5).setValue(cargoLider); hoja.getRange(55+offset1, 5).setValue(hoyCorto);
+      hoja.getRange(57+offset1, 1).setValue("UUID: " + uuid);
+    } 
+    else if (tipoReporte === "Reporte T2") {
+      let verf = b1.ensayos['Verificación'];
+      if (verf) {
+        hoja.getRange(47+offset1, 5).setValue(aComa(verf.replicas[0].peso)); hoja.getRange(47+offset1, 6).setValue(aComa(verf.replicas[1].peso));
+        hoja.getRange(48+offset1, 5).setValue(verf.replicas[0].balanza); hoja.getRange(48+offset1, 6).setValue(verf.replicas[1].balanza);
+        hoja.getRange(49+offset1, 5).setValue(verf.replicas[0].loteIsa); hoja.getRange(49+offset1, 6).setValue(verf.replicas[1].loteIsa);
+        hoja.getRange(50+offset1, 5).setValue(aComa(verf.replicas[0].mv)); hoja.getRange(50+offset1, 6).setValue(aComa(verf.replicas[1].mv));
+        hoja.getRange(51+offset1, 5).setValue(aComa(verf.replicas[0].mgkg)); hoja.getRange(51+offset1, 6).setValue(aComa(verf.replicas[1].mgkg));
+
+        if (verf.duplicadoData) {
+          hoja.getRange(53+offset1, 5).setValue(aComa(verf.duplicadoData.prom));
+          hoja.getRange(54+offset1, 5).setValue(aComa(verf.duplicadoData.rsdr));
+          hoja.getRange(55+offset1, 5).setValue(aComa(verf.duplicadoData.prsdr));
+          hoja.getRange(56+offset1, 5).setValue(aComa(verf.duplicadoData.horrat));
+        }
+      }
+      hoja.getRange(59+offset1, 4).setValue(observaciones);
+      hoja.getRange(53+offset1, 2).setValue(emailAnalista); hoja.getRange(54+offset1, 2).setValue(cargoAnalista); hoja.getRange(55+offset1, 2).setValue(hoyCorto);
+      hoja.getRange(58+offset1, 2).setValue(emailLider); hoja.getRange(59+offset1, 2).setValue(cargoLider); hoja.getRange(60+offset1, 2).setValue(hoyCorto);
+      hoja.getRange(62+offset1, 1).setValue("UUID: " + uuid);
+    }
+    else if (tipoReporte === "Reporte T3") {
+      hoja.getRange(47+offset1, 4).setValue(observaciones);
+      hoja.getRange(51+offset1, 1).setValue("UUID: " + uuid);
+
+      // ⚠️ SALTO DE PÁGINA DINÁMICO: Protegemos el diseño de la Página 2 respetando las adiciones previas
+      let rowSalto = 52 + offset1; 
+      hoja.setRowBreak(rowSalto);
+
+      let offset2 = llenarBloque(b2, 0, true);
+      let verf = b2.ensayos['Verificación'];
+      if (verf) {
+        hoja.getRange(83+offset1+offset2, 5).setValue(aComa(verf.replicas[0].peso)); hoja.getRange(83+offset1+offset2, 6).setValue(aComa(verf.replicas[1].peso));
+        hoja.getRange(84+offset1+offset2, 5).setValue(verf.replicas[0].balanza); hoja.getRange(84+offset1+offset2, 6).setValue(verf.replicas[1].balanza);
+        hoja.getRange(85+offset1+offset2, 5).setValue(verf.replicas[0].loteIsa); hoja.getRange(85+offset1+offset2, 6).setValue(verf.replicas[1].loteIsa);
+        hoja.getRange(86+offset1+offset2, 5).setValue(aComa(verf.replicas[0].mv)); hoja.getRange(86+offset1+offset2, 6).setValue(aComa(verf.replicas[1].mv));
+        hoja.getRange(87+offset1+offset2, 5).setValue(aComa(verf.replicas[0].mgkg)); hoja.getRange(87+offset1+offset2, 6).setValue(aComa(verf.replicas[1].mgkg));
+
+        if (verf.duplicadoData) {
+          hoja.getRange(89+offset1+offset2, 5).setValue(aComa(verf.duplicadoData.prom));
+          hoja.getRange(90+offset1+offset2, 5).setValue(aComa(verf.duplicadoData.rsdr));
+          hoja.getRange(91+offset1+offset2, 5).setValue(aComa(verf.duplicadoData.prsdr));
+          hoja.getRange(92+offset1+offset2, 5).setValue(aComa(verf.duplicadoData.horrat));
+        }
+      }
+      hoja.getRange(95+offset1+offset2, 4).setValue(observaciones);
+      hoja.getRange(101+offset1+offset2, 2).setValue(emailAnalista); hoja.getRange(102+offset1+offset2, 2).setValue(cargoAnalista); hoja.getRange(103+offset1+offset2, 2).setValue(hoyCorto);
+      hoja.getRange(101+offset1+offset2, 5).setValue(emailLider); hoja.getRange(102+offset1+offset2, 5).setValue(cargoLider); hoja.getRange(103+offset1+offset2, 5).setValue(hoyCorto);
+      hoja.getRange(105+offset1+offset2, 1).setValue("UUID: " + uuid);
+    }
+
+    SpreadsheetApp.flush(); 
+
+    // --- 4. EXPORTAR A PDF Y GUARDAR EN DRIVE ---
+    const parentFolder = DriveApp.getFolderById(ID_CARPETA);
+    const subfolders = parentFolder.searchFolders(`title = '${control}'`);
+    const folderCtrl = subfolders.hasNext() ? subfolders.next() : parentFolder.createFolder(control);
+
+    // ✅ CORRECCIÓN: Exportación a escala 2 forzando los saltos de página configurados
+    const pdfUrl = `https://docs.google.com/spreadsheets/d/${archivoTemp.getId()}/export?format=pdf&size=letter&portrait=true&scale=2&gridlines=false`;
+    
+    const token = ScriptApp.getOAuthToken();
+    const pdfBlob = UrlFetchApp.fetch(pdfUrl, { headers: { 'Authorization': 'Bearer ' + token } }).getBlob().setName(`${control} - Reporte de Yodo - ${hoyCorto}.pdf`);
+    
+    folderCtrl.createFile(pdfBlob);
+    archivoTemp.setTrashed(true); // Eliminamos el clon
+
+    // --- 5. ACTUALIZAR LAS 5 HOJAS DE BASES DE DATOS ---
+    const fechasA = datos.fechasAnalisis;
+    const fechasC = datos.fechasCurvas;
+    
+    const ssYodoReal = SpreadsheetApp.openById(CONFIG.APP_YODO.ID);
+    const ssPhReal = SpreadsheetApp.openById(CONFIG.EQUIPO_PH.ID);
+    
+    const hVerifReal = ssPhReal.getSheetByName(CONFIG.EQUIPO_PH.HOJAS.VERIFICACION);
+    const hUsoReal = ssPhReal.getSheetByName(CONFIG.EQUIPO_PH.HOJAS.USO);
+    const hCurvaReal = ssYodoReal.getSheetByName(CONFIG.APP_YODO.HOJAS.CURVA);
+    const hResReal = ssYodoReal.getSheetByName(CONFIG.APP_YODO.HOJAS.RESULTADOS);
+    const hRepReal = ssYodoReal.getSheetByName(CONFIG.APP_YODO.HOJAS.REPORTE);
+
+    const extractDateNative = (val) => {
+      if (!val) return "";
+      if (val instanceof Date) return Utilities.formatDate(val, Session.getScriptTimeZone(), "yyyy-MM-dd");
+      return String(val).substring(0, 10);
+    };
+
+    if (hVerifReal) {
+      const lr = hVerifReal.getLastRow();
+      if (lr >= 6) {
+        let dataV = hVerifReal.getRange(6, 1, lr - 5, 10).getValues();
+        dataV.forEach((row, i) => {
+          let fStr = extractDateNative(row[0]); let rev = String(row[8]).trim();
+          if (fechasA.includes(fStr) && rev === "") {
+            hVerifReal.getRange(i + 6, 9).setValue(hoyCorto); hVerifReal.getRange(i + 6, 10).setValue(emailLider);
+          }
+        });
+      }
+    }
+
+    if (hUsoReal) {
+      const lr = hUsoReal.getLastRow();
+      if (lr >= 7) {
+        let dataU = hUsoReal.getRange(7, 1, lr - 6, 9).getValues();
+        dataU.forEach((row, i) => {
+          if (String(row[1]).trim() === control && String(row[7]).trim() === "") {
+            hUsoReal.getRange(i + 7, 8).setValue(hoyCorto); hUsoReal.getRange(i + 7, 9).setValue(emailLider);
+          }
+        });
+      }
+    }
+
+    if (hCurvaReal) {
+      const lr = hCurvaReal.getLastRow();
+      if (lr >= 7) {
+        let dataC = hCurvaReal.getRange(7, 1, lr - 6, 24).getValues();
+        dataC.forEach((row, i) => {
+          let fcStr = (row[0] instanceof Date) ? Utilities.formatDate(row[0], Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm") : String(row[0]);
+          if (fechasC.includes(fcStr) && String(row[22]).trim() === "") {
+            hCurvaReal.getRange(i + 7, 23).setValue(hoyLargo); hCurvaReal.getRange(i + 7, 24).setValue(emailLider);
+          }
+        });
+      }
+    }
+
+    if (hResReal) {
+      const lr = hResReal.getLastRow();
+      if (lr >= 7) {
+        let dataR = hResReal.getRange(7, 1, lr - 6, 24).getValues();
+        dataR.forEach((row, i) => {
+          if (String(row[1]).trim() === control && String(row[21]).trim() === "") {
+            hResReal.getRange(i + 7, 22).setValue(hoyLargo); hResReal.getRange(i + 7, 23).setValue(emailLider); hResReal.getRange(i + 7, 24).setValue(uuid);
+          }
+        });
+      }
+    }
+
+    if (hRepReal) {
+      const lr = hRepReal.getLastRow();
+      if (lr >= 6) {
+        let dataRepR = hRepReal.getRange(6, 1, lr - 5, 16).getValues();
+        dataRepR.forEach((row, i) => {
+          if (String(row[0]).trim() === control && String(row[13]).trim() === "") {
+            hRepReal.getRange(i + 6, 12).setValue(observaciones); hRepReal.getRange(i + 6, 14).setValue(hoyCorto); hRepReal.getRange(i + 6, 15).setValue(emailLider); hRepReal.getRange(i + 6, 16).setValue(uuid);
+          }
+        });
+      }
+    }
+
+    return "Aprobación firmada y PDF generado correctamente. UUID: " + uuid;
+  } catch (e) {
+    throw new Error("Error generando PDF y firmando hojas: " + e.message);
+  }
+}

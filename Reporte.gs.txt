@@ -1,0 +1,342 @@
+// ====================================================================
+// Reporte.gs
+// ====================================================================
+
+// --- 🔍 CONSULTAS LOCALES (Lectura rápida nativa) ---
+
+function reportarMuestras() {
+  const status = verificarCurvaHoy(); 
+  
+  if (status.estado === "Sin registro de hoy") {
+    return { estado: "ALERTA_CURVA", mensaje: "Debe realizar y guardar una Curva de Calibración el día de hoy antes de procesar muestras." };
+  } else if (status.estado === "NO CUMPLE") {
+    return { estado: "ALERTA_CURVA", mensaje: "La Curva de Calibración de hoy resultó 'No cumple' (R² < 0.990). No es posible leer muestras." };
+  } else {
+    iniciarFormularioReporte();
+    return { estado: "OK", mensaje: "Curva de hoy aprobada. Abriendo formulario de muestras..." };
+  }
+}
+
+function iniciarFormularioReporte() {
+  const html = HtmlService.createHtmlOutputFromFile('form_ReporteMuestras').setWidth(1120).setHeight(750); 
+  SpreadsheetApp.getUi().showModalDialog(html, ' ');
+}
+
+function verificarCurvaHoy() {
+  try {
+    const ss = SpreadsheetApp.openById(CONFIG.APP_YODO.ID);
+    const hoja = ss.getSheetByName(CONFIG.APP_YODO.HOJAS.CURVA);
+    if (!hoja) return { estado: "Sin registro de hoy" };
+
+    const lastRow = hoja.getLastRow();
+    if (lastRow <= 6) return { estado: "Sin registro de hoy" };
+
+    const datos = hoja.getRange(7, 1, lastRow - 6, 21).getValues(); 
+    const hoyStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
+    let tieneConforme = false; let encontroHoy = false;
+
+    for (let i = datos.length - 1; i >= 0; i--) {
+      let fCell = datos[i][0];
+      if (fCell) {
+        let fStr = (fCell instanceof Date) ? Utilities.formatDate(fCell, Session.getScriptTimeZone(), "yyyy-MM-dd") : fCell.toString().substring(0, 10);
+        if (fStr === hoyStr) {
+          encontroHoy = true; 
+          let conf = String(datos[i][20]).toUpperCase(); 
+          if (conf.includes("CUMPLE") && !conf.includes("NO CUMPLE")) {
+            tieneConforme = true; break;
+          }
+        }
+      }
+    }
+    if (tieneConforme) return { estado: "CUMPLE" };
+    else if (encontroHoy) return { estado: "NO CUMPLE" }; 
+    else return { estado: "Sin registro de hoy" }; 
+  } catch (e) { return { estado: "Sin registro de hoy" }; }
+}
+
+function verificarEquipoReporte(codigoEquipo) {
+  if (codigoEquipo !== "MFPH-006") return { estado: "No aplica", color: "var(--gris)" };
+  try {
+    const ss = SpreadsheetApp.openById(CONFIG.EQUIPO_PH.ID);
+    const hoja = ss.getSheetByName(CONFIG.EQUIPO_PH.HOJAS.VERIFICACION);
+    if (!hoja) return { estado: "Sin hoja", color: "var(--gris)" };
+
+    const lastRow = hoja.getLastRow();
+    if (lastRow <= 6) return { estado: "Sin registros", color: "var(--gris)" };
+
+    const datos = hoja.getRange(7, 1, lastRow - 6, 7).getValues();
+    const hoyStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
+
+    for (let i = datos.length - 1; i >= 0; i--) {
+      let fc = datos[i][0];
+      if (fc) {
+        let fStr = (fc instanceof Date) ? Utilities.formatDate(fc, Session.getScriptTimeZone(), "yyyy-MM-dd") : fc.toString().substring(0, 10);
+        if (fStr === hoyStr) {
+          const conf = String(datos[i][6]).toUpperCase(); 
+          if (conf.includes("NO CONFORME")) return { estado: "NO CONFORME", color: "var(--error)" };
+          if (conf.includes("CONFORME")) return { estado: "CONFORME", color: "var(--success)" };
+        }
+      }
+    }
+    return { estado: "Sin registro de hoy", color: "var(--gris)" };
+  } catch (e) { return { estado: "Error conexión", color: "var(--error)" }; }
+}
+
+function getMuestrasData() {
+  const res = { muestras: [], muestrasVerificacion: [], mapReplicas: {}, controlesRutina: [] };
+  const ssYodo = SpreadsheetApp.openById(CONFIG.APP_YODO.ID);
+  const ssBR = SpreadsheetApp.openById(CONFIG.MUESTRAS_BR.ID);
+
+  const hojaBR = ssBR.getSheetByName(CONFIG.MUESTRAS_BR.HOJAS.MATRIZ);
+  if (hojaBR && hojaBR.getLastRow() >= 2) {
+    const dBR = hojaBR.getRange(2, 1, hojaBR.getLastRow() - 1, 7).getValues();
+    let mapM = {};
+    dBR.forEach(f => {
+      let c = String(f[0]).trim(); let p = String(f[3]).trim(); let iden = String(f[4]).trim(); 
+      let a = String(f[5]).trim().toUpperCase(); let e = String(f[6]).trim();
+      
+      if (c !== "") {
+        if (!mapM[c]) {
+          mapM[c] = { control: c, producto: p, identificacion: iden || "N/A", especificacion: "Sin especificación" };
+        } else {
+          if (mapM[c].identificacion === "N/A" || mapM[c].identificacion === "") {
+            if (iden !== "") mapM[c].identificacion = iden;
+          }
+        }
+        
+        if (/YODO\s*\/\s*IODINE/.test(a) || a.includes("YODO")) {
+          mapM[c].especificacion = e;
+          if (iden !== "") mapM[c].identificacion = iden; 
+        }
+      }
+    });
+    res.muestras = Object.values(mapM).sort((a,b) => a.control.localeCompare(b.control, undefined, {numeric: true}));
+  }
+
+  const hojaRes = ssYodo.getSheetByName(CONFIG.APP_YODO.HOJAS.RESULTADOS);
+  if (hojaRes && hojaRes.getLastRow() > 6) {
+    const dRes = hojaRes.getRange(7, 2, hojaRes.getLastRow() - 6, 18).getValues();
+    let mapVerif = {};
+    let setRutinasExistentes = new Set(); 
+
+    dRes.forEach(r => {
+      let ctrl = String(r[0]).trim(); let rep = parseInt(r[1], 10);
+      let tipoMuestra = String(r[2]).trim(); let prod = String(r[3]).trim(); 
+      let iden = String(r[4]).trim(); let infVal = String(r[16]).trim(); let supVal = String(r[17]).trim();
+      
+      if (ctrl) {
+        if (tipoMuestra === "Rutina") setRutinasExistentes.add(ctrl);
+        if (!isNaN(rep)) res.mapReplicas[ctrl] = Math.max(res.mapReplicas[ctrl] || 0, rep);
+        mapVerif[ctrl] = { control: ctrl, producto: prod, identificacion: iden || "N/A", especificacion: "Verificación de análisis anterior", inf: infVal, sup: supVal };
+      }
+    });
+    res.muestrasVerificacion = Object.values(mapVerif).sort((a,b) => a.control.localeCompare(b.control, undefined, {numeric: true}));
+    res.controlesRutina = Array.from(setRutinasExistentes); 
+  }
+  return res;
+}
+
+function getInventarioData() {
+  const res = { balanzas: [], pipetas10mL: [], balones100mL: [], lotesISA: [] };
+  const ssYodo = SpreadsheetApp.openById(CONFIG.APP_YODO.ID);
+  const ssSol = SpreadsheetApp.openById(CONFIG.SOLUCIONES.ID);
+  const ssInv = SpreadsheetApp.openById(CONFIG.INVENTARIO.ID);
+
+  const hojaMat = ssYodo.getSheetByName(CONFIG.APP_YODO.HOJAS.MATRIZ);
+  if (hojaMat && hojaMat.getLastRow() > 1) res.balanzas = hojaMat.getRange(2, 1, hojaMat.getLastRow() - 1, 1).getValues().map(r => r[0]).filter(c => c !== "");
+
+  const hojaInv = ssInv.getSheetByName(CONFIG.INVENTARIO.HOJAS.MATERIAL);
+  if (hojaInv && hojaInv.getLastRow() > 6) {
+    hojaInv.getRange(7, 1, hojaInv.getLastRow() - 6, 15).getValues().forEach(f => {
+      let c = String(f[0]).trim(); let m = String(f[1]).trim();
+      let v = parseFloat(String(f[5]).replace(',', '.')); let e = String(f[14]).trim(); 
+      if (c && e !== "Caducado" && e !== "No cumple") {
+        if (m === "Pipeta aforada" && v === 10) res.pipetas10mL.push(c);
+        else if (m.includes("Balón aforado") && v === 100) res.balones100mL.push(c);
+      }
+    });
+  }
+
+  const hojaTraz = ssSol.getSheetByName(CONFIG.SOLUCIONES.HOJAS.TRAZABILIDAD);
+  if (hojaTraz && hojaTraz.getLastRow() > 6) {
+    const hoy = new Date(); hoy.setHours(0,0,0,0);
+    hojaTraz.getRange(7, 1, hojaTraz.getLastRow() - 6, 19).getValues().forEach(f => {
+      let c = f[0]; let n = String(f[4]).trim().toUpperCase(); let conc = String(f[5]).trim();
+      let est = String(f[12]).trim().toUpperCase(); let fV = f[18];
+      let vig = false;
+      if (fV) { let dt = (fV instanceof Date) ? fV : new Date(fV.toString().replace(/-/g, '\/')); if (!isNaN(dt.getTime())) { dt.setHours(0,0,0,0); if(dt >= hoy) vig = true; } }
+      if (vig && (est === "EN PREPARACIÓN" || est === "FINALIZADO") && n === "ISA" && (conc === "42,5 % m/v" || conc === "42.5 % m/v")) res.lotesISA.push(c);
+    });
+  }
+  return res;
+}
+
+function getCurvasData() {
+  const curvas = [];
+  const ssYodo = SpreadsheetApp.openById(CONFIG.APP_YODO.ID);
+  const hojaCurva = ssYodo.getSheetByName(CONFIG.APP_YODO.HOJAS.CURVA);
+  if (hojaCurva && hojaCurva.getLastRow() > 6) {
+    const hoyStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
+    const limpiar = (str) => String(str).replace(/\.$/, '').split(';\n');
+    const safeFloat = (v, valNA) => (String(v).toUpperCase().includes("NA") ? valNA : parseFloat(String(v).replace(',', '.')));
+
+    hojaCurva.getRange(7, 1, hojaCurva.getLastRow() - 6, 21).getValues().forEach((fila, idx) => {
+      if (fila[0]) {
+        let fStr = (fila[0] instanceof Date) ? Utilities.formatDate(fila[0], Session.getScriptTimeZone(), "yyyy-MM-dd") : fila[0].toString().substring(0,10);
+        let conf = String(fila[20]).toUpperCase();
+        if (fStr === hoyStr && conf.includes("CUMPLE") && !conf.includes("NO CUMPLE")) {
+          let hStr = (fila[0] instanceof Date) ? Utilities.formatDate(fila[0], Session.getScriptTimeZone(), "HH:mm") : fila[0].toString().substring(13,18);
+          curvas.push({
+            id: idx, etiqueta: `Curva ${hStr} (R²: ${fila[19]})`,
+            a: parseFloat(String(fila[17]).replace(',','.')), b: parseFloat(String(fila[18]).replace(',','.')), r2: parseFloat(String(fila[19]).replace(',','.')),
+            niveles: limpiar(fila[9]), conc: limpiar(fila[12]).map(v => safeFloat(v, "N/A")), log: limpiar(fila[13]).map(v => safeFloat(v, "N/A")), mv: limpiar(fila[16]).map(v => safeFloat(v, "")) 
+          });
+        }
+      }
+    });
+  }
+  return curvas;
+}
+
+// --- 🚀 PUENTE PARA ESCRITURA ---
+
+function guardarReporteMuestras(datos) {
+  const usuario = Session.getActiveUser().getEmail();
+  const payload = { accion: "guardarReporteMuestras", datos: datos, usuario: usuario };
+  
+  let opcionesPost = {
+    method: "post",
+    contentType: "application/json",
+    headers: { "Authorization": "Bearer " + ScriptApp.getOAuthToken() },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true,
+    followRedirects: false 
+  };
+  
+  let resp = UrlFetchApp.fetch(CONFIG.WEB_APP_URL, opcionesPost);
+  
+  if (resp.getResponseCode() === 302 || resp.getResponseCode() === 303 || resp.getResponseCode() === 307) {
+    const nuevaUrl = resp.getHeaders()['Location'];
+    
+    let opcionesGet = {
+      method: "get",
+      headers: { "Authorization": "Bearer " + ScriptApp.getOAuthToken() },
+      muteHttpExceptions: true
+    };
+    resp = UrlFetchApp.fetch(nuevaUrl, opcionesGet);
+  }
+  
+  const textoRespuesta = resp.getContentText();
+  
+  if (textoRespuesta.trim().toLowerCase().startsWith("<!doctype")) {
+    throw new Error("Error del servidor de Google al retornar los datos. La operación posiblemente se guardó.");
+  }
+  
+  const resultado = JSON.parse(textoRespuesta);
+  if (!resultado.exito) throw new Error(resultado.error);
+  
+  return resultado.datos;
+}
+
+
+// --- 🔐 LÓGICA REAL DE ESCRITURA (En la Web App) ---
+
+function ejecutarLogicaGuardarReporteMuestras(datos, usuario) {
+  try {
+    const ssYodo = SpreadsheetApp.openById(CONFIG.APP_YODO.ID);
+    const ssPh = SpreadsheetApp.openById(CONFIG.EQUIPO_PH.ID);
+    
+    const hojaRes = ssYodo.getSheetByName(CONFIG.APP_YODO.HOJAS.RESULTADOS);
+    const hojaDup = ssYodo.getSheetByName(CONFIG.APP_YODO.HOJAS.DUPLICADOS);
+    const hojaUso = ssPh.getSheetByName(CONFIG.EQUIPO_PH.HOJAS.USO);
+
+    if (!hojaRes || !hojaDup || !hojaUso) throw new Error("No se encontraron algunas de las hojas de destino.");
+
+    const fechaObj = new Date();
+    const emailUsuario = usuario; 
+
+    const aComa = (val) => {
+      if (val === null || val === undefined || val === "" || val === "NA" || val === "-") return "No aplica";
+      return String(val).replace(/\./g, ',');
+    };
+
+    const colorear = (celda, texto) => {
+      let t = String(texto).toUpperCase();
+      if (t.includes("NO APLICA")) celda.setBackground(null).setFontColor(null).setFontWeight('normal');
+      else if (t.includes("NO CUMPLE")) celda.setBackground('#fef2f2').setFontColor('#dc2626').setFontWeight('bold');
+      else if (t.includes("CUMPLE")) celda.setBackground('#ecfdf5').setFontColor('#059669').setFontWeight('bold');
+    };
+
+    const getRealLastRow = (hoja, col) => {
+      const vals = hoja.getRange(1, col, hoja.getMaxRows(), 1).getValues();
+      for (let i = vals.length - 1; i >= 0; i--) {
+        if (vals[i][0] && String(vals[i][0]).trim() !== "") return i + 1;
+      }
+      return 1; 
+    };
+
+    let lrRes = getRealLastRow(hojaRes, 1) + 1;
+    let lrDup = getRealLastRow(hojaDup, 1) + 1;
+    let lrUso = getRealLastRow(hojaUso, 1) + 1;
+
+    let verifUso = String(datos.eqVerificacion).toUpperCase().includes("NO") ? "No cumple" : "Cumple";
+
+    datos.muestras.forEach(m => {
+      const evaluarConf = (mgkg) => {
+        if (m.na) return "No aplica";
+        let val = parseFloat(String(mgkg).replace(',','.'));
+        if (isNaN(val)) return "No aplica";
+        if (val >= parseFloat(m.inf) && val <= parseFloat(m.sup)) return "Cumple";
+        return "No cumple";
+      };
+
+      const cConf1 = evaluarConf(m.rep1.mgkg);
+      const cConf2 = evaluarConf(m.rep2.mgkg);
+
+      const fila1 = [
+        fechaObj, m.control, m.rep1.r, m.tipoMuestra, m.producto, m.identificacion, 
+        m.rep1.bal, aComa(m.rep1.pso), m.rep1.bM, m.rep1.pip, m.rep1.bD, 
+        datos.eqPh, datos.eqVerificacion, m.rep1.isa, datos.curva, aComa(m.rep1.mv), 
+        aComa(m.rep1.mgkg), m.na ? "No aplica" : aComa(m.inf), m.na ? "No aplica" : aComa(m.sup), 
+        cConf1, emailUsuario
+      ];
+      hojaRes.getRange(lrRes, 1, 1, fila1.length).setValues([fila1]);
+      colorear(hojaRes.getRange(lrRes, 20), cConf1);
+      lrRes++;
+
+      const fila2 = [
+        fechaObj, m.control, m.rep2.r, m.tipoMuestra, m.producto, m.identificacion, 
+        m.rep2.bal, aComa(m.rep2.pso), m.rep2.bM, m.rep2.pip, m.rep2.bD, 
+        datos.eqPh, datos.eqVerificacion, m.rep2.isa, datos.curva, aComa(m.rep2.mv), 
+        aComa(m.rep2.mgkg), m.na ? "No aplica" : aComa(m.inf), m.na ? "No aplica" : aComa(m.sup), 
+        cConf2, emailUsuario
+      ];
+      hojaRes.getRange(lrRes, 1, 1, fila2.length).setValues([fila2]);
+      colorear(hojaRes.getRange(lrRes, 20), cConf2);
+      lrRes++;
+
+      const filaDup = [
+        fechaObj, m.control, m.tipoMuestra, "Sólido", "No aplica",
+        m.rep1.r, aComa(m.rep1.mgkg), m.rep2.r, aComa(m.rep2.mgkg), "mg/kg",
+        aComa(m.promedio), aComa(m.rsdr), aComa(m.prsdr), aComa(m.horrat), m.confHorrat
+      ];
+      hojaDup.getRange(lrDup, 1, 1, filaDup.length).setValues([filaDup]);
+      colorear(hojaDup.getRange(lrDup, 15), m.confHorrat);
+      lrDup++;
+
+      const filaUso = [
+        fechaObj, m.control, m.producto, verifUso, 
+        datos.drenado, datos.limpieza, emailUsuario
+      ];
+      hojaUso.getRange(lrUso, 1, 1, filaUso.length).setValues([filaUso]);
+      colorear(hojaUso.getRange(lrUso, 4), verifUso);
+      colorear(hojaUso.getRange(lrUso, 5), datos.drenado);
+      colorear(hojaUso.getRange(lrUso, 6), datos.limpieza);
+      lrUso++;
+    });
+
+    return "¡Todos los registros guardados exitosamente!";
+  } catch (err) {
+    throw new Error(err.message);
+  }
+}

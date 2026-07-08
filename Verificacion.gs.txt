@@ -1,0 +1,144 @@
+// ====================================================================
+// Verificacion.gs
+// ====================================================================
+
+// --- 🔍 CONSULTAS LOCALES ---
+
+function registrarVerificacion() {
+  try {
+    const ssEquipo = SpreadsheetApp.openById(CONFIG.EQUIPO_PH.ID);
+    const hojaSeguimiento = ssEquipo.getSheetByName(CONFIG.EQUIPO_PH.HOJAS.SEGUIMIENTO);
+    if (!hojaSeguimiento) throw new Error("No se encontró la hoja 'Seguimiento'.");
+    
+    const ultimaFila = hojaSeguimiento.getLastRow();
+    let seguimientoAlDia = false;
+    
+    if (ultimaFila > 5) {
+      const fechas = hojaSeguimiento.getRange(6, 1, ultimaFila - 5, 1).getValues();
+      const hoy = new Date();
+      const mesActual = hoy.getMonth();
+      const anioActual = hoy.getFullYear();
+      
+      for (let i = 0; i < fechas.length; i++) {
+        let valorFecha = fechas[i][0];
+        if (valorFecha) {
+          let fechaObj = (valorFecha instanceof Date) ? valorFecha : new Date(valorFecha.toString().replace(/-/g, '\/'));
+          if (!isNaN(fechaObj.getTime())) {
+            if (fechaObj.getMonth() === mesActual && fechaObj.getFullYear() === anioActual) {
+              seguimientoAlDia = true; break; 
+            }
+          }
+        }
+      }
+    }
+    
+    if (seguimientoAlDia) {
+      abrirFormularioVerificacion();
+      return { estado: "OK", mensaje: "Seguimiento al día. Abriendo formulario..." };
+    } else {
+      return { estado: "ALERTA", mensaje: "Falta el seguimiento mensual." };
+    }
+  } catch(error) { throw new Error("Error validando seguimiento: " + error.message); }
+}
+
+function abrirFormularioVerificacion() {
+  const html = HtmlService.createHtmlOutputFromFile('form_RegistroVerificacion').setWidth(600).setHeight(650);
+  SpreadsheetApp.getUi().showModalDialog(html, ' ');
+}
+
+function obtenerLotesActivos() {
+  const lotesYoduro = []; const lotesIsa = [];
+  try {
+    const ssSoluciones = SpreadsheetApp.openById(CONFIG.SOLUCIONES.ID);
+    const hoja = ssSoluciones.getSheetByName(CONFIG.SOLUCIONES.HOJAS.TRAZABILIDAD);
+    if (!hoja) throw new Error("No se encontró la hoja de Trazabilidad");
+    
+    const lastRow = hoja.getLastRow();
+    if (lastRow > 6) {
+      const info = hoja.getRange(7, 1, lastRow - 6, 19).getValues();
+      const hoy = new Date(); hoy.setHours(0, 0, 0, 0); 
+      
+      info.forEach(fila => {
+        const codigo = fila[0]; const nombre = fila[4]; const concentracion = fila[5];
+        const estado = fila[12]; const fechaVenc = fila[18];      
+        
+        let estaVigente = false;
+        if (fechaVenc) {
+          let fVenc = (fechaVenc instanceof Date) ? fechaVenc : new Date(fechaVenc.toString().replace(/-/g, '\/'));
+          if (!isNaN(fVenc.getTime())) { fVenc.setHours(0, 0, 0, 0); if (fVenc.getTime() >= hoy.getTime()) estaVigente = true; }
+        }
+        if (estaVigente && (estado === "EN PREPARACIÓN" || estado === "FINALIZADO")) {
+          if (nombre === "ESTANDAR DE YODURO" && concentracion === "1000 ppm") lotesYoduro.push(codigo);
+          if (nombre === "ISA" && concentracion === "42,5 % m/v") lotesIsa.push(codigo);
+        }
+      });
+    }
+    return { yoduro: lotesYoduro, isa: lotesIsa };
+  } catch (error) { throw new Error("Error obteniendo lotes: " + error.message); }
+}
+
+// --- 🚀 PUENTE PARA ESCRITURA (CORREGIDO) ---
+
+function guardarVerificacion(datos) {
+  const usuario = Session.getActiveUser().getEmail();
+  const payload = { accion: "guardarVerificacion", datos: datos, usuario: usuario };
+  
+  // 1. Enviamos el POST inicial evadiendo la redirección automática
+  let opcionesPost = {
+    method: "post",
+    contentType: "application/json",
+    headers: { "Authorization": "Bearer " + ScriptApp.getOAuthToken() },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true,
+    followRedirects: false 
+  };
+  
+  let resp = UrlFetchApp.fetch(CONFIG.WEB_APP_URL, opcionesPost);
+  
+  // 2. Si Google responde con un salto (302), atrapamos la URL temporal
+  if (resp.getResponseCode() === 302 || resp.getResponseCode() === 303 || resp.getResponseCode() === 307) {
+    const nuevaUrl = resp.getHeaders()['Location'];
+    
+    // 3. ✅ EL SECRETO: Hacemos el salto mediante un 'GET' limpio, inyectando el token nuevamente
+    let opcionesGet = {
+      method: "get",
+      headers: { "Authorization": "Bearer " + ScriptApp.getOAuthToken() },
+      muteHttpExceptions: true
+    };
+    resp = UrlFetchApp.fetch(nuevaUrl, opcionesGet);
+  }
+  
+  const textoRespuesta = resp.getContentText();
+  
+  // Salvavidas mejorado (toLowerCase para atrapar cualquier variable de HTML)
+  if (textoRespuesta.trim().toLowerCase().startsWith("<!doctype")) {
+    throw new Error("Error del servidor de Google al retornar los datos. La operación posiblemente se guardó.");
+  }
+  
+  const resultado = JSON.parse(textoRespuesta);
+  if (!resultado.exito) throw new Error(resultado.error);
+  
+  return resultado.datos;
+}
+
+// --- 🔐 LÓGICA REAL DE ESCRITURA (En la Web App) ---
+
+function ejecutarLogicaGuardarVerificacion(datos, usuario) {
+  try {
+    const ss = SpreadsheetApp.openById(CONFIG.EQUIPO_PH.ID);
+    const hoja = ss.getSheetByName(CONFIG.EQUIPO_PH.HOJAS.VERIFICACION);
+    if (!hoja) throw new Error("No se encontró la hoja 'Verificación'.");
+
+    const fechaObj = new Date();
+    const formatDec = (num) => parseFloat(num).toFixed(1).replace('.', ',');
+
+    hoja.appendRow([ fechaObj, datos.loteYoduro, datos.loteIsa, formatDec(datos.resp1), formatDec(datos.resp10), formatDec(datos.diferencia), datos.conformidad, usuario, "", "" ]);
+
+    const ultimaFila = hoja.getLastRow();
+    const celdaConformidad = hoja.getRange(ultimaFila, 7);
+    if (datos.conformidad === 'CONFORME') celdaConformidad.setBackground('#ecfdf5').setFontColor('#059669').setFontWeight('bold');
+    else celdaConformidad.setBackground('#fef2f2').setFontColor('#dc2626').setFontWeight('bold');
+
+    return "Verificación registrada exitosamente.";
+  } catch (error) { throw new Error(error.message); }
+}

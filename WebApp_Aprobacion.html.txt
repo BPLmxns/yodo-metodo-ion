@@ -1,0 +1,497 @@
+<!-- WebApp_Aprobacion.html -->
+
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root { --lima: #afcc46; --cian: #00abe6; --azul-oscuro: #0a4079; --gris: #6b7280; --fondo: #f4f7f9; --error: #ef4444; --success: #10b981; }
+    body { font-family: 'Segoe UI', sans-serif; background: var(--fondo); margin: 0; padding: 0; color: #333; }
+    
+    .header { background: var(--azul-oscuro); color: white; padding: 20px; text-align: center; border-bottom: 5px solid var(--lima); }
+    .header h1 { margin: 0; font-size: 18px; text-transform: uppercase; letter-spacing: 1px; }
+    .header p { margin: 5px 0 0; font-size: 12px; color: #bae6fd; }
+
+    .container { padding: 20px; max-width: 1200px; margin: 0 auto; }
+    
+    .table-container { background: white; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); overflow-x: auto; border: 1px solid #e1e5eb; }
+    table { width: 100%; border-collapse: collapse; min-width: 800px; }
+    th { background: #f8f9fa; color: var(--azul-oscuro); padding: 12px 15px; font-size: 11px; text-align: left; border-bottom: 2px solid #e1e5eb; text-transform: uppercase; }
+    td { padding: 12px 15px; font-size: 12px; border-bottom: 1px solid #e1e5eb; vertical-align: middle; transition: all 0.3s; }
+    tr:hover td { background: #f1f5f9; }
+
+    /* Estilos para filas ya firmadas */
+    .row-firmada td { background-color: #f8fafc; color: #94a3b8; }
+    .row-firmada strong { color: #64748b !important; }
+    .row-firmada .badge { filter: grayscale(100%); opacity: 0.7; }
+
+    .btn-traz { background: var(--azul-oscuro); color: white; border: none; padding: 8px 15px; border-radius: 4px; font-weight: bold; font-size: 11px; cursor: pointer; transition: 0.2s; }
+    .btn-traz:hover { background: #0d4d8d; transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    
+    .btn-firmado { background: #10b981; color: white; border: none; padding: 8px 15px; border-radius: 4px; font-weight: bold; font-size: 11px; cursor: not-allowed; display: flex; align-items: center; justify-content: center; gap: 5px; width: 100%; box-sizing: border-box;}
+
+    .badge { padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; text-transform: uppercase; display: inline-block; }
+    .badge-conforme { background: #ecfdf5; color: #059669; border: 1px solid #10b981; }
+    .badge-noconforme { background: #fef2f2; color: #dc2626; border: 1px solid #ef4444; }
+
+    /* ====== MODAL DE TRAZABILIDAD ====== */
+    #modal-traz { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(10, 64, 121, 0.85); z-index: 1000; justify-content: center; align-items: center; backdrop-filter: blur(5px); padding: 20px;}
+    .modal-content { position: relative; background: var(--fondo); width: 95%; max-width: 1050px; height: 95vh; border-radius: 10px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 15px 30px rgba(0,0,0,0.3); animation: slideUp 0.3s ease-out; }
+    @keyframes slideUp { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+    /* ====== EFECTO WIZARD AL FIRMAR ====== */
+    #overlay-submit { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(4px); z-index: 2000; flex-direction: column; justify-content: center; align-items: center; text-align: center; animation: fadeInOverlay 0.3s ease-in-out; }
+    @keyframes fadeInOverlay { from { opacity: 0; } to { opacity: 1; } }
+    .submit-spinner { width: 55px; height: 55px; border-radius: 50%; border: 5px solid #e1e5eb; border-top-color: var(--azul-oscuro); border-bottom-color: var(--lima); animation: spin 1s linear infinite; margin-bottom: 20px; }
+    .submit-icon-success { display: none; font-size: 65px; margin-bottom: 10px; animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+    @keyframes popIn { 0% { transform: scale(0.3); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+    .submit-title { font-size: 18px; font-weight: 800; margin: 0 0 8px 0; transition: color 0.3s;}
+    .submit-text { font-size: 13px; color: var(--gris); margin: 0; font-weight: 500;}
+
+    .m-header { background: white; padding: 15px 25px; border-bottom: 3px solid var(--cian); display: flex; justify-content: space-between; align-items: center; }
+    .m-header h2 { margin: 0; color: var(--azul-oscuro); font-size: 18px; }
+    .m-body { padding: 20px; overflow-y: auto; flex-grow: 1; }
+    .m-footer { background: white; padding: 20px 25px; border-top: 1px solid #e1e5eb; display: flex; gap: 20px; align-items: stretch; }
+
+    .segment-title { font-size: 14px; font-weight: 800; color: var(--azul-oscuro); margin-bottom: 10px; display: flex; align-items: center; gap: 6px; margin-top: 20px; }
+    .segment-title::before { content: ""; width: 4px; height: 14px; background: var(--lima); border-radius: 5px; }
+
+    .info-card { background: white; border: 1px solid #e1e5eb; border-radius: 6px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+    .grid-info { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; }
+    
+    .d-box { background: #f8f9fa; border: 1px solid #e1e5eb; padding: 10px 12px; border-radius: 6px; }
+    .d-box small { display: block; font-size: 10px; color: var(--gris); font-weight: 700; margin-bottom: 4px; }
+    .d-box span { font-size: 14px; color: var(--azul-oscuro); font-weight: 800; }
+
+    .tb-mini { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 11px; background: white;}
+    .tb-mini th { background: #f1f5f9; color: var(--azul-oscuro); padding: 8px; border: 1px solid #e1e5eb; text-transform: none; text-align: center;} 
+    .tb-mini td { padding: 8px; border: 1px solid #e1e5eb; text-align: center; color: #374151; }
+
+    textarea { width: 100%; padding: 12px; border: 1px solid #ced4da; border-radius: 5px; font-size: 13px; box-sizing: border-box; resize: none; font-family: inherit; }
+    textarea:focus { border-color: var(--cian); outline: none; box-shadow: 0 0 0 3px rgba(0,171,230,0.1); }
+
+    .btn-aprobar { background: var(--success); color: white; border: none; padding: 12px 25px; border-radius: 5px; font-weight: bold; font-size: 13px; cursor: pointer; transition: 0.2s; }
+    .btn-aprobar:hover { background: #047857; }
+    .btn-cancelar { background: transparent; border: 1px solid var(--gris); color: var(--gris); padding: 12px 25px; border-radius: 5px; font-weight: bold; font-size: 13px; cursor: pointer; transition: 0.2s;}
+    .btn-cancelar:hover { background: #f1f5f9; color: var(--azul-oscuro); border-color: var(--azul-oscuro); }
+
+    #loader { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(255, 255, 255, 0.9); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 3000; }
+    .spinner { width: 40px; height: 40px; border-radius: 50%; border: 4px solid transparent; border-top-color: var(--azul-oscuro); border-right-color: var(--lima); border-bottom-color: var(--cian); border-left-color: var(--gris); animation: spin 0.9s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+  <div id="loader">
+    <div class="spinner"></div>
+    <p id="lblLoader" style="margin-top:15px; font-size:13px; font-weight:700; color:var(--azul-oscuro)">Cargando trazabilidad analítica...</p>
+  </div>
+
+  <div class="header">
+    <h1>Aprobación de Informes - Yodo</h1>
+    <p>Sistema de Gestión de Calidad</p>
+  </div>
+
+  <div class="container">
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>Control</th>
+            <th>Producto</th>
+            <th>Fecha de análisis</th>
+            <th>Resultado (Prom)</th>
+            <th>Especificación</th>
+            <th style="text-align:center;">AC</th>
+            <th>Analista</th>
+            <th style="text-align:center;">Acción</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyMain">
+          <!-- Render dinámico -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- MODAL DE TRAZABILIDAD -->
+  <div id="modal-traz">
+    <div class="modal-content">
+      
+      <!-- EFECTO WIZARD DE GUARDADO -->
+      <div id="overlay-submit">
+        <div class="submit-spinner" id="submit-spinner"></div>
+        <div class="submit-icon-success" id="submit-icon-success">✅</div>
+        <h3 class="submit-title" id="submit-title" style="color:var(--azul-oscuro);">Firmando aprobación...</h3>
+        <p class="submit-text" id="submit-text">Verificando trazabilidad y estampando firma.</p>
+      </div>
+
+      <div class="m-header">
+        <h2 id="lblMuestraTitle">Control: -</h2>
+        <span id="lblConformidadFinal" class="badge">Pendiente</span>
+      </div>
+      
+      <div class="m-body" id="mBody">
+        <!-- Renderizado dinámico de la trazabilidad -->
+      </div>
+      
+      <div class="m-footer">
+        <div style="flex: 1; display: flex; flex-direction: column;">
+          <label style="font-size: 11px; font-weight: 700; color: var(--azul-oscuro); display: block; margin-bottom: 5px;">Observaciones del líder (Opcional):</label>
+          <textarea id="txtObservaciones" placeholder="Ingrese sus comentarios aquí..." style="flex: 1;"></textarea>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 10px; width: 220px; justify-content: flex-end;">
+          <button class="btn-cancelar" style="width: 100%;" onclick="cerrarModal()">CANCELAR</button>
+          <button class="btn-aprobar" id="btnAprobar" style="width: 100%;" onclick="ejecutarAprobacion()">FIRMAR APROBACIÓN</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let dbPendientes = [];
+    let ctrlActivo = null;
+    let chartsActivos = [];
+
+    window.onload = () => {
+      google.script.run
+        .withSuccessHandler(res => {
+          dbPendientes = res;
+          renderizarTablaPrincipal();
+          document.getElementById('loader').style.display = 'none';
+        })
+        .withFailureHandler(err => { 
+          document.getElementById('lblLoader').innerText = "❌ Error: " + err.message;
+          document.getElementById('lblLoader').style.color = "var(--error)";
+          document.querySelector('.spinner').style.display = 'none';
+        })
+        .obtenerDatosAprobacion();
+    };
+
+    function formatF(val) {
+      if(!val || val==="NA" || val==="N/A" || val==="No aplica") return val;
+      const n = parseFloat(String(val).replace(',','.'));
+      return isNaN(n) ? val : n.toFixed(2).replace('.',',');
+    }
+
+    function renderizarTablaPrincipal() {
+      const tb = document.getElementById('tbodyMain');
+      tb.innerHTML = '';
+
+      if(dbPendientes.length === 0) {
+        tb.innerHTML = `<tr><td colspan="8" style="text-align:center; padding: 40px; color:var(--gris); font-style:italic;">No hay informes pendientes de aprobación.</td></tr>`;
+        return;
+      }
+
+      dbPendientes.forEach((item, idx) => {
+        let confStr = String(item.conformidad || "").toUpperCase();
+        let confBadge = confStr.includes('NO') ? `<span class="badge badge-noconforme">${item.conformidad}</span>` : `<span class="badge badge-conforme">${item.conformidad}</span>`;
+        let acIcon = (item.ac === "OK" || item.ac === true) ? `<strong style="color:var(--success)">✔</strong>` : `<strong style="color:var(--error)">✖</strong>`;
+
+        let rowClass = item.firmado ? "row-firmada" : "";
+        let actionBtn = item.firmado 
+          ? `<button class="btn-firmado" disabled><span>✔</span> REVISADO</button>` 
+          : `<button class="btn-traz" onclick="abrirTrazabilidad(${idx})">Ver trazabilidad</button>`;
+
+        tb.innerHTML += `
+          <tr class="${rowClass}">
+            <td><strong>${item.control}</strong></td>
+            <td><span style="display:block; line-height:1.2;">${item.producto}</span><small style="color:var(--gris)">Identificación: ${item.identificacion}</small></td>
+            <td>${item.fechaAnalisis}</td>
+            <td><strong style="color:var(--azul-oscuro); font-size:14px;">${formatF(item.promedio)}</strong> <small>${item.unidad}</small></td>
+            <td style="color:var(--gris); font-size:11px;">${item.especificacion}</td>
+            <td style="text-align:center; font-size:16px;">${acIcon}</td>
+            <td>${item.analista}</td>
+            <td style="text-align:center;">${actionBtn}</td>
+          </tr>
+        `;
+      });
+    }
+
+    function abrirTrazabilidad(idx) {
+      if(dbPendientes[idx].firmado) return; // Si ya fue firmado, no hace nada
+
+      ctrlActivo = dbPendientes[idx];
+      let confStr = String(ctrlActivo.conformidad || "").toUpperCase();
+      
+      document.getElementById('lblMuestraTitle').innerText = `Trazabilidad: ${ctrlActivo.control} - ${ctrlActivo.producto}`;
+      document.getElementById('lblConformidadFinal').className = `badge ${confStr.includes('NO') ? 'badge-noconforme' : 'badge-conforme'}`;
+      document.getElementById('lblConformidadFinal').innerText = `Res. Final: ${ctrlActivo.conformidad}`;
+      document.getElementById('txtObservaciones').value = "";
+
+      chartsActivos.forEach(c => c.destroy());
+      chartsActivos = [];
+
+      let html = '';
+
+      ctrlActivo.bloques.forEach((bloque, bIdx) => {
+        if (ctrlActivo.bloques.length > 1) {
+          html += `<div style="background:var(--azul-oscuro); color:white; padding:8px 15px; border-radius:6px; margin-top:25px; margin-bottom:15px; font-weight:bold; text-transform:uppercase; font-size:12px;">Análisis del ${bloque.fecha}</div>`;
+        }
+
+        // ================== SEGMENTO 1: VERIFICACIÓN ==================
+        html += `<div class="segment-title">Segmento I: Verificación diaria del equipo</div>`;
+        if(bloque.equipoVerif) {
+          let v = bloque.equipoVerif;
+          let bClass = String(v.conf || "").toUpperCase().includes('NO') ? 'badge-noconforme' : 'badge-conforme';
+          let fHoraLabel = v.fHora ? v.fHora.substring(0,10) : "N/A"; 
+          html += `
+            <div class="info-card">
+              <div class="grid-info" style="margin-bottom:12px;">
+                <div class="d-box"><small>Fecha de análisis</small><span>${fHoraLabel}</span></div>
+                <div class="d-box"><small>Responsable</small><span style="font-size:12px;">${v.resp}</span></div>
+              </div>
+              <table class="tb-mini">
+                <tr><th>Estándar de yoduro</th><th>Solución ISA</th><th>Respuesta 1 mL [mV]</th><th>Respuesta 10 mL [mV]</th><th>Dif. (ΔmV)</th><th>Conformidad</th></tr>
+                <tr><td>${v.loteYod}</td><td>${v.loteIsa}</td><td>${v.resp1}</td><td>${v.resp10}</td><td><strong>${v.diff}</strong></td><td><span class="badge ${bClass}">${v.conf}</span></td></tr>
+              </table>
+            </div>
+          `;
+        } else {
+          html += `<div class="info-card" style="text-align:center; color:var(--error); font-style:italic;">No se encontró registro de Verificación 'Conforme' para esta fecha.</div>`;
+        }
+
+        // ================== SEGMENTO 2: CURVAS Y RESULTADOS ==================
+        html += `<div class="segment-title">Segmento II: Curva de calibración y resultados de muestras</div>`;
+        html += `<div style="background: #f8fafc; border:2px solid #cbd5e1; border-radius:8px; padding:18px; margin-bottom:20px;">`;
+
+        // ================= DATOS DE LA CURVA =================
+        if (bloque.curvaData) {
+          let c = bloque.curvaData;
+          let canvasId = `chart_${idx}_${bIdx}`;
+          
+          let tbNiveles = '';
+          if(c.niveles) {
+            c.niveles.forEach((n, iN) => {
+              tbNiveles += `<tr><td>${n}</td><td>${c.conc[iN]}</td><td><span style="font-family:monospace; color:var(--gris);">${c.log[iN]}</span></td><td><strong>${c.mv[iN]}</strong></td></tr>`;
+            });
+          }
+
+          html += `
+            <div style="margin-bottom: 30px;">
+              <strong style="font-size:14px; color:var(--azul-oscuro); text-transform:uppercase; display:block; margin-bottom:10px; border-bottom:1px solid #cbd5e1; padding-bottom:5px;">Datos de Calibración (${bloque.nombreCurva})</strong>
+              
+              <table class="tb-mini" style="margin-bottom:10px;">
+                <tr><th>Balanza</th><th>Estándar madre</th><th>Peso KI [mg]</th><th>Balón std.</th></tr>
+                <tr><td>${c.balanza}</td><td>${c.loteYod}</td><td>${c.pesoKi}</td><td>${c.balonStd}</td></tr>
+              </table>
+              
+              <table class="tb-mini" style="margin-bottom:15px;">
+                <tr><th>Nivel</th><th>Conc. [ppm]</th><th>Log(Conc.)</th><th>Respuesta [mV]</th></tr>
+                ${tbNiveles}
+              </table>
+
+              <div style="background:white; border:1px solid #e1e5eb; border-radius:6px; padding:15px; display:flex; flex-direction:column; margin-top:20px;">
+                <div style="display:flex; justify-content:space-around; margin-bottom:15px; padding-bottom:10px; border-bottom:1px dashed #e1e5eb;">
+                  <span style="font-size:13px; color:var(--gris);">Pendiente (a): <strong style="color:#333">${c.a}</strong></span>
+                  <span style="font-size:13px; color:var(--gris);">Intercepto (b): <strong style="color:#333">${c.b}</strong></span>
+                  <span style="font-size:13px; color:var(--gris);">R²: <strong style="color:var(--azul-oscuro)">${c.r2}</strong></span>
+                  <span style="font-size:13px; color:var(--azul-oscuro); font-weight:bold;">y = ${c.a}x + ${String(c.b).includes('-') ? '' : '+'}${c.b}</span>
+                </div>
+                <div style="height:250px; width:100%; position:relative;"><canvas id="${canvasId}"></canvas></div>
+              </div>
+            </div>
+          `;
+
+          setTimeout(() => {
+            const ctx = document.getElementById(canvasId).getContext('2d');
+            let xData = [], yData = [];
+            
+            let mvBlanco = 0;
+            if (c.mv && c.mv.length > 0) {
+              mvBlanco = parseFloat(String(c.mv[0]).replace(',','.'));
+              if (isNaN(mvBlanco)) mvBlanco = 0;
+            }
+
+            if(c.log) {
+              c.log.forEach((lx, j) => { 
+                if(lx !== "NA" && lx !== "N/A" && lx !== "") { 
+                  let xVal = parseFloat(String(lx).replace(',','.'));
+                  let yValDirecto = parseFloat(String(c.mv[j]).replace(',','.'));
+                  
+                  if (!isNaN(xVal) && !isNaN(yValDirecto)) {
+                    xData.push(xVal); 
+                    yData.push(yValDirecto - mvBlanco);
+                  }
+                } 
+              });
+            }
+            
+            let aNum = parseFloat(String(c.a).replace(',','.')); 
+            let bNum = parseFloat(String(c.b).replace(',','.'));
+            let lineData = [];
+            if(xData.length > 0 && !isNaN(aNum) && !isNaN(bNum)) {
+              lineData = [ {x: Math.min(...xData), y: (aNum * Math.min(...xData) + bNum)}, {x: Math.max(...xData), y: (aNum * Math.max(...xData) + bNum)} ];
+            }
+
+            let chart = new Chart(ctx, {
+              type: 'scatter',
+              data: {
+                datasets: [{ 
+                  label: 'Lectura Corregida', 
+                  data: xData.map((x,k)=>({x:x, y:yData[k]})), 
+                  backgroundColor: '#0a4079', 
+                  pointRadius: 6 
+                }, { 
+                  label: 'Tendencia', 
+                  data: lineData, 
+                  type: 'line', 
+                  borderColor: '#afcc46', 
+                  borderWidth: 2, 
+                  fill: false, 
+                  pointRadius: 0 
+                }]
+              },
+              options: { 
+                responsive: true, 
+                maintainAspectRatio: false, 
+                plugins: { legend: { display: false } }, 
+                scales: { 
+                  x: { type: 'linear', title: { display: true, text: 'Log(Concentración)', color: '#6b7280', font: {size:12, weight:'bold'} } }, 
+                  y: { title: { display: true, text: 'Lectura Corregida [mV]', color: '#6b7280', font: {size:12, weight:'bold'} } } 
+                } 
+              }
+            });
+            chartsActivos.push(chart);
+          }, 150);
+        } else {
+            html += `<div style="margin-bottom: 25px;"><strong style="font-size:14px; color:var(--error); text-transform:uppercase; display:block; margin-bottom:10px; border-bottom:1px solid #cbd5e1; padding-bottom:5px;">Datos de Calibración (${bloque.nombreCurva})</strong><p style="color:var(--gris); font-size: 12px; font-style:italic;">No se pudo recuperar la curva de calibración.</p></div>`;
+        }
+
+        // ================= DATOS DE RESULTADOS =================
+        let tiposOrdenados = Object.keys(bloque.ensayos).sort((a, b) => {
+          if (a.toLowerCase() === 'rutina') return -1;
+          if (b.toLowerCase() === 'rutina') return 1;
+          return a.localeCompare(b);
+        });
+
+        tiposOrdenados.forEach(tipo => {
+          let ensayo = bloque.ensayos[tipo];
+          let colorTitulo = tipo.toLowerCase() === 'rutina' ? 'var(--azul-oscuro)' : '#059669';
+
+          html += `<div style="margin-top:20px;">`;
+          html += `<strong style="font-size:14px; color:${colorTitulo}; text-transform:uppercase; display:block; margin-bottom:10px; padding-bottom:5px; border-bottom: 1px dashed ${colorTitulo};">Resultados de muestra (${tipo})</strong>`;
+
+          let tbReps = '';
+          if(ensayo.replicas) {
+            ensayo.replicas.forEach(rp => {
+              tbReps += `<tr><td>Rep ${rp.rep}</td><td>${rp.peso} g</td><td>${rp.balanza}</td><td>${rp.loteIsa}</td><td>${rp.mv}</td><td><strong style="color:var(--azul-oscuro); font-size:14px;">${rp.mgkg}</strong></td></tr>`;
+            });
+          }
+
+          html += `
+            <table class="tb-mini">
+              <tr><th>Réplica</th><th>Peso de muestra [g]</th><th>Balanza</th><th>Lote ISA</th><th>Lectura [mV]</th><th>Concentración [mg/kg]</th></tr>
+              ${tbReps}
+            </table>
+          `;
+
+          if (ensayo.duplicadoData) {
+            let d = ensayo.duplicadoData;
+            let hrStr = String(d.horrat).replace(',','.');
+            let confHor = parseFloat(hrStr) <= 1.3 ? '<span class="badge badge-conforme" style="margin-top:5px; font-size:11px;">Cumple</span>' : '<span class="badge badge-noconforme" style="margin-top:5px; font-size:11px;">No cumple</span>';
+            
+            let confPromHTML = "";
+            if (String(d.confProm).toUpperCase() === 'CUMPLE') {
+              confPromHTML = '<span class="badge badge-conforme" style="margin-top:5px; font-size:11px;">Cumple</span>';
+            } else if (String(d.confProm).toUpperCase() === 'NO CUMPLE') {
+              confPromHTML = '<span class="badge badge-noconforme" style="margin-top:5px; font-size:11px;">No cumple</span>';
+            }
+
+            html += `
+              <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-top: 15px;">
+                <div class="d-box" style="display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center;">
+                  <small>Promedio [mg/kg]</small>
+                  <span style="font-size:22px;">${d.prom}</span>
+                  ${confPromHTML}
+                </div>
+                <div class="d-box" style="display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center;">
+                  <small>RSD(r) [%]</small>
+                  <span style="font-size:22px; color:#374151;">${d.rsdr}</span>
+                </div>
+                <div class="d-box" style="display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center;">
+                  <small>PRSD(R) [%]</small>
+                  <span style="font-size:22px; color:#374151;">${d.prsdr}</span>
+                </div>
+                <div class="d-box" style="display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center;">
+                  <small style="width:100%;">HorRat(r) (≤ 1.3)</small>
+                  <span style="font-size:22px; color:#374151; line-height:1;">${d.horrat}</span>
+                  ${confHor}
+                </div>
+              </div>
+            `;
+          }
+
+          html += `</div>`; 
+        });
+
+        html += `</div>`; 
+      });
+
+      document.getElementById('mBody').innerHTML = html;
+      document.getElementById('modal-traz').style.display = 'flex';
+    }
+
+    function cerrarModal() {
+      document.getElementById('modal-traz').style.display = 'none';
+      ctrlActivo = null;
+    }
+
+    function ejecutarAprobacion() {
+      if(!ctrlActivo) return;
+      
+      const obs = document.getElementById('txtObservaciones').value.trim();
+      
+      // ENCENDER WIZARD DE CARGA
+      document.getElementById('overlay-submit').style.display = 'flex';
+      document.getElementById('submit-spinner').style.display = 'block';
+      document.getElementById('submit-icon-success').style.display = 'none';
+      document.getElementById('submit-title').innerText = 'Generando Reporte y Firmando...';
+      document.getElementById('submit-title').style.color = 'var(--azul-oscuro)';
+      document.getElementById('submit-text').innerText = 'Creando PDF y escribiendo en bases de datos. No cierre la ventana.';
+
+      // Extraer fechas clave para que el backend localice las celdas a firmar
+      const fechasA = ctrlActivo.bloques.map(b => b.fecha);
+      const fechasC = ctrlActivo.bloques.map(b => b.curvaData ? b.curvaData.fHora : null).filter(Boolean);
+
+      // ⚠️ AJUSTE VITAL: Enviamos el objeto ctrlActivo completo (ctrlData) para construir el PDF
+      const payload = { 
+        ctrlData: ctrlActivo,
+        observaciones: obs,
+        fechasAnalisis: fechasA,
+        fechasCurvas: fechasC
+      };
+
+      // Como estamos en la Web App (Líder), va directo por google.script.run
+      google.script.run
+        .withSuccessHandler(res => {
+          // EFECTO DE ÉXITO
+          document.getElementById('submit-spinner').style.display = 'none';
+          document.getElementById('submit-icon-success').style.display = 'block';
+          document.getElementById('submit-title').innerText = '¡Aprobación Exitosa!';
+          document.getElementById('submit-title').style.color = 'var(--success)';
+          
+          // 'res' trae el mensaje del servidor incluyendo el UUID generado
+          document.getElementById('submit-text').innerText = res + '\n\nRegresando al menú...';
+          
+          // Marcar visualmente como "REVISADO" en el frontend
+          const index = dbPendientes.findIndex(x => x.control === ctrlActivo.control);
+          if (index !== -1) dbPendientes[index].firmado = true;
+
+          // Esperamos 3.5 segundos para que el líder alcance a leer el UUID antes de cerrar
+          setTimeout(() => {
+            cerrarModal();
+            renderizarTablaPrincipal();
+            document.getElementById('overlay-submit').style.display = 'none';
+          }, 3500); 
+        })
+        .withFailureHandler(err => {
+          document.getElementById('overlay-submit').style.display = 'none';
+          alert("Error al procesar la aprobación: " + err.message);
+        })
+        .firmarAprobacionLider(payload);
+    }
+  </script>
+</body>
+</html>

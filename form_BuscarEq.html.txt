@@ -1,0 +1,200 @@
+<!-- form_BuscarEq.html -->
+
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    :root {
+      --lima: #afcc46; --cian: #00abe6; --azul-oscuro: #0a4079;
+      --gris: #6b7280; --fondo: #f4f7f9; --error: #ef4444; --success: #10b981;
+    }
+
+    body { font-family: 'Segoe UI', sans-serif; background: var(--fondo); margin: 0; padding: 0; color: #333; }
+    
+    .modal-header { background: var(--azul-oscuro); color: white; padding: 15px; text-align: center; border-bottom: 4px solid var(--lima); position: sticky; top: 0; z-index: 10; }
+    .modal-header h2 { margin: 0; font-size: 16px; text-transform: uppercase; letter-spacing: 1px; }
+
+    .content { padding: 15px; padding-bottom: 80px; }
+
+    .card { background: white; border-radius: 8px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #e1e5eb; }
+    .card-title { font-size: 10px; font-weight: 800; color: var(--gris); text-transform: uppercase; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+    .card-title::before { content: ""; width: 3px; height: 10px; background: var(--cian); border-radius: 5px; }
+
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .field { margin-bottom: 10px; }
+    
+    label { display: block; font-size: 11px; font-weight: 700; color: var(--azul-oscuro); margin-bottom: 4px; text-transform: uppercase;}
+
+    input[type="text"], select { width: 100%; padding: 8px 10px; border: 1px solid #ced4da; border-radius: 5px; font-size: 12px; box-sizing: border-box; transition: all 0.2s; font-family: inherit;}
+    input:focus, select:focus { border-color: var(--cian); outline: none; box-shadow: 0 0 0 3px rgba(0,171,230,0.1); }
+    
+    /* ====== CONTENEDOR BUSCADOR CON X ====== */
+    .input-container { position: relative; width: 100%; }
+    .input-container input { padding-right: 30px; font-weight: bold; color: var(--azul-oscuro);}
+    .clear-btn { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 11px; color: var(--error); cursor: pointer; display: none; background: white; border-radius: 50%; width: 18px; height: 18px; text-align: center; line-height: 18px; font-weight: bold; transition: 0.2s;}
+    .clear-btn:hover { background: #fef2f2; transform: translateY(-50%) scale(1.1); }
+
+    /* ====== TABLA GENÉRICA COMPACTA ====== */
+    .table-container { overflow-y: auto; max-height: 380px; margin-top: 5px; border: 1px solid #e1e5eb; border-radius: 6px; }
+    table { width: 100%; border-collapse: collapse; min-width: 500px; background: white; }
+    th { background: #f8f9fa; color: var(--azul-oscuro); padding: 10px; font-size: 11px; text-align: left; border-bottom: 2px solid #e1e5eb; font-weight: 700; position: sticky; top: 0; z-index: 5;}
+    td { padding: 8px 10px; font-size: 12px; border-bottom: 1px solid #e1e5eb; vertical-align: middle; color: #374151;}
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f4f7f9; }
+
+    /* ====== FOOTER ====== */
+    .footer { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; background: white; border-top: 1px solid #e1e5eb; position: fixed; bottom: 0; width: 100%; box-sizing: border-box; z-index: 10;}
+    .btn-cancel { background: transparent; border: 1px solid var(--gris); color: var(--gris); padding: 10px 20px; border-radius: 5px; font-weight: 700; cursor: pointer; font-size: 12px; transition: 0.2s;}
+    .btn-cancel:hover { background: #f1f5f9; color: var(--azul-oscuro); border-color: var(--azul-oscuro);}
+    
+    .contador { font-weight: 800; color: var(--azul-oscuro); font-size: 13px; }
+
+    /* ====== LOADER ====== */
+    #loader { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(255, 255, 255, 0.9); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 1000; }
+    .spinner { width: 40px; height: 40px; border-radius: 50%; border: 4px solid transparent; border-top-color: var(--azul-oscuro); border-right-color: var(--lima); border-bottom-color: var(--cian); border-left-color: var(--gris); animation: spin 0.9s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    /* ====== TOAST ====== */
+    #toast-container { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 2000; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+    .toast { padding: 10px 20px; border-radius: 6px; color: white; font-size: 12px; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,0.15); opacity: 0; transform: translateY(-20px); transition: all 0.3s ease-out; display: flex; align-items: center; gap: 8px; }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast-error { background-color: var(--error); }
+  </style>
+</head>
+<body>
+
+  <div id="toast-container"></div>
+  
+  <div id="loader">
+    <div class="spinner"></div>
+    <p style="margin-top:15px; font-size:12px; font-weight:700; color:var(--azul-oscuro)">Cargando Matriz de Equipos...</p>
+  </div>
+
+  <div class="modal-header">
+    <h2>Consulta de Equipos</h2>
+  </div>
+
+  <div class="content">
+    
+    <!-- TARJETA DE FILTROS -->
+    <div class="card">
+      <div class="card-title">Filtros de Búsqueda</div>
+      <div class="grid">
+        <div class="field">
+          <label>Área Operativa</label>
+          <select id="filtroArea" onchange="renderTabla()">
+            <option value="">-- Todas las áreas --</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Búsqueda Rápida (Código)</label>
+          <div class="input-container">
+            <input type="text" id="buscadorTxt" placeholder="Ej: BAL-001..." autocomplete="off" oninput="toggleClearBtn(); renderTabla()">
+            <span class="clear-btn" id="clearBtn" onclick="limpiarFiltro()">✖</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TARJETA DE RESULTADOS -->
+    <div class="card">
+      <div class="card-title">Inventario de Balanzas Registradas</div>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 40%;">Código del Equipo</th>
+              <th style="width: 60%;">Área Operativa</th>
+            </tr>
+          </thead>
+          <tbody id="bTable">
+            <!-- Renderizado dinámico -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="footer">
+    <span class="contador" id="contador">Total: 0 equipos</span>
+    <button class="btn-cancel" onclick="google.script.host.close()">CERRAR CONSULTA</button>
+  </div>
+
+  <script>
+    let DATOS_EQUIPOS = [];
+
+    window.onload = () => {
+      google.script.run
+        .withSuccessHandler(res => {
+          DATOS_EQUIPOS = res.equipos;
+          
+          const ops = res.areas.map(a => `<option value="${a}">${a}</option>`).join('');
+          document.getElementById('filtroArea').innerHTML = '<option value="">-- Todas las áreas --</option>' + ops;
+          
+          renderTabla();
+          document.getElementById('loader').style.display = 'none';
+        })
+        .withFailureHandler(err => {
+          document.getElementById('loader').style.display = 'none';
+          mostrarToastError(err.message);
+        })
+        .obtenerDatosEquipos();
+    };
+
+    function mostrarToastError(msg) {
+      const t = document.getElementById('toast-container');
+      const d = document.createElement('div');
+      d.className = `toast toast-error`;
+      d.innerHTML = `⚠️ ${msg}`;
+      t.appendChild(d);
+      setTimeout(() => d.classList.add('show'), 10);
+      setTimeout(() => { d.classList.remove('show'); setTimeout(() => d.remove(), 300); }, 3500);
+    }
+
+    function toggleClearBtn() {
+      const val = document.getElementById('buscadorTxt').value;
+      document.getElementById('clearBtn').style.display = val ? 'block' : 'none';
+    }
+
+    function limpiarFiltro() {
+      const input = document.getElementById('buscadorTxt');
+      input.value = '';
+      input.focus();
+      toggleClearBtn();
+      renderTabla();
+    }
+
+    function renderTabla() {
+      const areaFiltro = document.getElementById('filtroArea').value;
+      const textoFiltro = document.getElementById('buscadorTxt').value.toUpperCase().trim();
+      const body = document.getElementById('bTable');
+      const cont = document.getElementById('contador');
+      
+      body.innerHTML = "";
+
+      const filtrados = DATOS_EQUIPOS.filter(eq => {
+        let pasaArea = !areaFiltro || eq.area === areaFiltro;
+        let pasaTexto = !textoFiltro || eq.codigo.toUpperCase().includes(textoFiltro);
+        return pasaArea && pasaTexto;
+      });
+      
+      if (filtrados.length === 0) {
+        body.innerHTML = `<tr><td colspan="2" style="text-align:center; padding:30px; color:var(--gris); font-style:italic;">No se encontraron equipos que coincidan con la búsqueda.</td></tr>`;
+        cont.innerText = `Total: 0 equipos`;
+        return;
+      }
+
+      body.innerHTML = filtrados.map(eq => `
+        <tr>
+          <td><strong style="color:var(--azul-oscuro); font-size:13px;">${eq.codigo}</strong></td>
+          <td>${eq.area || '<span style="color:var(--gris); font-style:italic;">No especificada</span>'}</td>
+        </tr>
+      `).join('');
+      
+      cont.innerText = `Total: ${filtrados.length} equipos`;
+    }
+  </script>
+</body>
+</html>

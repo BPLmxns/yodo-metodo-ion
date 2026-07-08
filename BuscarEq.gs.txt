@@ -1,0 +1,57 @@
+// ====================================================================
+// BuscarEq.gs (Módulo de Consulta de Equipos / Solo lectura)
+// ====================================================================
+
+function consultarEquipos() {
+  iniciarFormularioEquipos();
+  return "Módulo de Consulta de Equipos iniciado...";
+}
+
+function iniciarFormularioEquipos() {
+  const html = HtmlService.createHtmlOutputFromFile('form_BuscarEq')
+    .setWidth(750)
+    .setHeight(800);
+  SpreadsheetApp.getUi().showModalDialog(html, ' ');
+}
+
+/**
+ * Extrae la lista de equipos (Balanzas) y sus áreas desde la hoja Matriz
+ */
+function obtenerDatosEquipos() {
+  try {
+    const ssYodo = SpreadsheetApp.openById(CONFIG.APP_YODO.ID);
+    const hojaMatriz = ssYodo.getSheetByName(CONFIG.APP_YODO.HOJAS.MATRIZ);
+    if (!hojaMatriz) throw new Error("No se encontró la hoja 'Matriz' en el libro principal.");
+
+    const ultimaFila = hojaMatriz.getLastRow();
+    if (ultimaFila < 2) return { equipos: [], areas: [] };
+
+    // Extraemos la Columna A (Código) y Columna B (Área) a partir de la fila 2
+    const datosMatriz = hojaMatriz.getRange(2, 1, ultimaFila - 1, 2).getDisplayValues();
+    
+    let equipos = [];
+    let areasSet = new Set();
+
+    datosMatriz.forEach(fila => {
+      const codigo = String(fila[0]).trim();
+      const area = String(fila[1]).trim();
+      
+      if (codigo !== "") {
+        equipos.push({ codigo: codigo, area: area });
+        if (area !== "") areasSet.add(area);
+      }
+    });
+
+    // Ordenar alfabéticamente
+    equipos.sort((a, b) => a.codigo.localeCompare(b.codigo, undefined, {numeric: true, sensitivity: 'base'}));
+    const areasUnicas = Array.from(areasSet).sort();
+
+    return {
+      equipos: equipos,
+      areas: areasUnicas
+    };
+
+  } catch (e) {
+    throw new Error("Error obteniendo datos de los equipos: " + e.message);
+  }
+}

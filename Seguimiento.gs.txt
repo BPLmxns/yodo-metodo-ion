@@ -1,0 +1,120 @@
+// ====================================================================
+// Seguimiento.gs
+// ====================================================================
+
+// --- 🔍 CONSULTAS LOCALES ---
+
+function iniciarFormularioSeguimiento() {
+  const html = HtmlService.createHtmlOutputFromFile('form_SeguimientoMensual').setWidth(600).setHeight(650);
+  SpreadsheetApp.getUi().showModalDialog(html, ' ');
+  return "Abriendo módulo de seguimiento...";
+}
+
+function obtenerDatosMatriz() {
+  return { equipos: [{ codigo: "MFPH-006", area: "Materias Primas" }] };
+}
+
+// --- 🚀 PUENTE PARA ESCRITURA ---
+
+function registrarSeguimiento(datos) {
+  const usuario = Session.getActiveUser().getEmail();
+  const payload = { accion: "registrarSeguimiento", datos: datos, usuario: usuario };
+  
+  // 1. Enviamos el POST inicial evadiendo la redirección automática
+  let opcionesPost = {
+    method: "post",
+    contentType: "application/json",
+    headers: { "Authorization": "Bearer " + ScriptApp.getOAuthToken() },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true,
+    followRedirects: false 
+  };
+  
+  let resp = UrlFetchApp.fetch(CONFIG.WEB_APP_URL, opcionesPost);
+  
+  // 2. Si Google responde con un salto (302), atrapamos la URL temporal
+  if (resp.getResponseCode() === 302 || resp.getResponseCode() === 303 || resp.getResponseCode() === 307) {
+    const nuevaUrl = resp.getHeaders()['Location'];
+    
+    // 3. ✅ EL SECRETO: Hacemos el salto mediante un 'GET' limpio, inyectando el token nuevamente
+    let opcionesGet = {
+      method: "get",
+      headers: { "Authorization": "Bearer " + ScriptApp.getOAuthToken() },
+      muteHttpExceptions: true
+    };
+    resp = UrlFetchApp.fetch(nuevaUrl, opcionesGet);
+  }
+  
+  const textoRespuesta = resp.getContentText();
+  
+  if (textoRespuesta.trim().toLowerCase().startsWith("<!doctype")) {
+    throw new Error("Error del servidor de Google al retornar los datos. La operación posiblemente se guardó.");
+  }
+  
+  const resultado = JSON.parse(textoRespuesta);
+  if (!resultado.exito) throw new Error(resultado.error);
+  
+  return resultado.datos;
+}
+
+// --- 🔐 LÓGICA REAL DE ESCRITURA (En la Web App) ---
+
+function ejecutarLogicaRegistrarSeguimiento(datos, usuario) {
+  try {
+    const ss = SpreadsheetApp.openById(CONFIG.EQUIPO_PH.ID);
+    const hoja = ss.getSheetByName(CONFIG.EQUIPO_PH.HOJAS.SEGUIMIENTO);
+    if (!hoja) throw new Error("No se encontró la hoja 'Seguimiento'.");
+    
+    const fechaObj = new Date();
+    const fechaActual = Utilities.formatDate(fechaObj, Session.getScriptTimeZone(), "yyyy-MM-dd");
+    const aspectosFormateados = datos.aspectos + ".";
+    
+    hoja.appendRow([ fechaActual, datos.estado, aspectosFormateados, datos.observaciones, datos.correcciones, usuario, "", "" ]);
+    
+    const ultimaFila = hoja.getLastRow();
+    const celdaEstado = hoja.getRange(ultimaFila, 2);
+    if (datos.estado === 'Conforme') celdaEstado.setBackground('#ecfdf5').setFontColor('#059669').setFontWeight('bold');
+    else celdaEstado.setBackground('#fef2f2').setFontColor('#dc2626').setFontWeight('bold');
+    hoja.getRange(ultimaFila, 3).setWrap(true);
+
+    const urlDocumento = ss.getUrl();
+    enviarCorreoSeguimiento(datos.codigo, datos.area, fechaObj, datos.estado, datos.observaciones, urlDocumento);
+    
+    return "✅ Seguimiento registrado exitosamente. Correo enviado al Liderazgo.";
+  } catch (error) { throw new Error(error.message); }
+}
+
+function enviarCorreoSeguimiento(codigoEquipo, areaEquipo, fechaObj, estado, observaciones, urlDocumento) {
+  const meses = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+  const mesNombre = meses[fechaObj.getMonth()];
+
+  const destinatarios = obtenerDestinatariosLideres();
+  const baseUrlWebApp = CONFIG.WEB_APP_URL; 
+  const linkFirmas = baseUrlWebApp + "?equipo=" + encodeURIComponent(codigoEquipo);
+
+  const cuerpoHTML = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><style>body { margin:0; padding:0; background-color:#f4f7f9; font-family:'Segoe UI', sans-serif; } .email-container { max-width:600px; margin:20px auto; background:#fff; border-radius:10px; border:1px solid #e1e5eb; } .header { background:#0a4079; padding:20px; text-align:center; border-bottom:5px solid #afcc46; border-radius:10px 10px 0 0; } .header h2 { margin:0; font-size:20px; color:#fff; text-transform:uppercase; letter-spacing:1px; } .content { padding:25px; color:#333; line-height:1.5; } .status-card { background:#fcfcfc; border-left:5px solid #00abe6; border-radius:6px; padding:15px; margin:20px 0; border:1px solid #eee; } .data-row { margin-bottom:10px; } .data-row:last-child { margin-bottom:0; } .label { color:#6b7280; font-size:11px; text-transform:uppercase; font-weight:800; display:block; margin-bottom:2px; } .value { color:#0a4079; font-size:14px; font-weight:600; } .btn-webapp { display:inline-block; background:#00abe6; color:#fff !important; text-decoration:none; padding:10px 20px; border-radius:6px; font-weight:bold; font-size:13px; margin:5px; transition:0.3s; } .btn-secondary { background:#6b7280; } .final-notice { background:#0a4079; border-top:5px solid #afcc46; padding:15px; font-size:11px; color:#fff; text-align:center; border-radius:0 0 10px 10px; }</style></head>
+<body>
+<div class="email-container">
+  <div class="header"><h2>Seguimiento Mensual - Equipo</h2></div>
+  <div class="content">
+    <p>Estimados líderes del área de <strong>${areaEquipo}</strong>,</p>
+    <p>Se ha registrado el seguimiento mensual del equipo <strong style="color:#0a4079;">${codigoEquipo}</strong>.</p>
+    <div class="status-card">
+      <div class="data-row"><span class="label">Estado General</span><span class="value">${estado}</span></div>
+      <div class="data-row"><span class="label">Observaciones</span><span class="value" style="color:#6b7280;font-style:italic;">"${observaciones || 'Sin observaciones.'}"</span></div>
+    </div>
+    <div style="text-align:center; margin-top:20px;">
+      <a href="${urlDocumento}" class="btn-webapp btn-secondary" target="_blank">VER HISTORIAL</a>
+      <a href="${linkFirmas}" class="btn-webapp" target="_blank">REVISAR Y FIRMAR</a>
+    </div>
+  </div>
+  <div class="final-notice">Sistema de Gestión de Calidad - Mérieux NutriSciences Colombia</div>
+</div>
+</body>
+</html>`;
+
+  MailApp.sendEmail({ to: destinatarios, subject: `Revisión mensual (${mesNombre}) - Equipo: ${codigoEquipo}`, htmlBody: cuerpoHTML });
+}

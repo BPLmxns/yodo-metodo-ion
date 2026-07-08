@@ -1,0 +1,353 @@
+// ====================================================================
+// RevisarInformes.gs
+// ====================================================================
+
+// --- 🔍 CONSULTAS LOCALES (Lectura rápida nativa) ---
+
+function informeMuestras() {
+  iniciarFormularioInformes();
+  return "Módulo de Informes iniciado...";
+}
+
+function iniciarFormularioInformes() {
+  const html = HtmlService.createHtmlOutputFromFile('form_RevisarInformes')
+    .setWidth(1100) 
+    .setHeight(650);
+  SpreadsheetApp.getUi().showModalDialog(html, ' ');
+}
+
+function obtenerDatosInformes() {
+  const payload = [];
+
+  try {
+    const ssYodo = SpreadsheetApp.openById(CONFIG.APP_YODO.ID);
+    
+    const hojaRes = ssYodo.getSheetByName(CONFIG.APP_YODO.HOJAS.RESULTADOS);
+    const hojaDup = ssYodo.getSheetByName(CONFIG.APP_YODO.HOJAS.DUPLICADOS);
+    const hojaRep = ssYodo.getSheetByName(CONFIG.APP_YODO.HOJAS.REPORTE); 
+
+    if (!hojaRes || !hojaDup || !hojaRep) throw new Error("No se encontraron las hojas de Resultados, Duplicados o Reporte.");
+
+    const lrRes = hojaRes.getLastRow();
+    const lrDup = hojaDup.getLastRow();
+    const lrRep = hojaRep.getLastRow();
+
+    if (lrRes < 7 || lrDup < 8) return payload; 
+
+    // 1. Mapear controles YA reportados (Filtro anti-duplicidad)
+    const controlesReportados = new Set();
+    if (lrRep > 5) { 
+      const datosRep = hojaRep.getRange(6, 1, lrRep - 5, 1).getValues();
+      datosRep.forEach(r => {
+        const ctrl = String(r[0]).trim();
+        if (ctrl !== "") controlesReportados.add(ctrl);
+      });
+    }
+
+    // 2. Extraer Resultados Pendientes de Revisión 
+    const datosRes = hojaRes.getRange(7, 1, lrRes - 6, 24).getValues();
+    let mapMuestras = {};
+
+    datosRes.forEach(fila => {
+      const fechaRev = fila[22]; 
+      
+      if (!fechaRev || fechaRev === "") {
+        const control = String(fila[1]).trim();
+        const replica = parseInt(fila[2], 10);
+        const producto = String(fila[4]).trim();
+
+        if (control && !controlesReportados.has(control)) {
+          if (!mapMuestras[control]) {
+            mapMuestras[control] = { control: control, producto: producto, maxRep: 0, historial: [] };
+          }
+          if (!isNaN(replica) && replica > mapMuestras[control].maxRep) {
+            mapMuestras[control].maxRep = replica;
+          }
+        }
+      }
+    });
+
+    // 3. Extraer el historial del "Control de Duplicados" 
+    const datosDup = hojaDup.getRange(8, 1, lrDup - 7, 15).getValues();
+    
+    datosDup.forEach(fila => {
+      const control = String(fila[1]).trim();
+      if (mapMuestras[control]) {
+        mapMuestras[control].historial.push({
+          tipo: String(fila[2]).trim(),       
+          repA: fila[5],                      
+          resA: fila[6],                      
+          repB: fila[7],                      
+          resB: fila[8],                      
+          unidad: fila[9],                    
+          promedio: fila[10],                 
+          horrat: fila[13],                   
+          revision: String(fila[14]).trim()   
+        });
+      }
+    });
+
+    // 4. Evaluar la lógica AC (Aseguramiento de Calidad)
+    Object.values(mapMuestras).forEach(m => {
+      let acAprobado = false;
+      
+      if (m.historial.length > 0) {
+        const primero = m.historial[0];
+        const ultimo = m.historial[m.historial.length - 1];
+        
+        const tipoPrimer = primero.tipo.toUpperCase();
+        const revPrimer = primero.revision.toUpperCase();
+
+        if (tipoPrimer.includes("RUTINA")) {
+          if (revPrimer.includes("CUMPLE") && !revPrimer.includes("NO CUMPLE")) {
+            acAprobado = true; 
+          } else if (revPrimer.includes("NO CUMPLE")) {
+            if (m.historial.length > 1) {
+              const tipoUltimo = ultimo.tipo.toUpperCase();
+              const revUltimo = ultimo.revision.toUpperCase();
+              if (tipoUltimo.includes("VERIFICACI") && revUltimo.includes("CUMPLE") && !revUltimo.includes("NO CUMPLE")) {
+                acAprobado = true; 
+              }
+            }
+          }
+        } else {
+          const revUltimo = ultimo.revision.toUpperCase();
+          if (revUltimo.includes("CUMPLE") && !revUltimo.includes("NO CUMPLE")) {
+            acAprobado = true;
+          }
+        }
+      }
+
+      m.ac = acAprobado;
+      payload.push(m);
+    });
+
+    payload.sort((a,b) => a.control.localeCompare(b.control, undefined, {numeric: true, sensitivity: 'base'}));
+
+    return payload;
+  } catch (err) {
+    throw new Error("Error obteniendo los informes pendientes: " + err.message);
+  }
+}
+
+// --- 🚀 PUENTE PARA ESCRITURA ---
+
+function enviarSolicitudRevision(controles) {
+  const usuario = Session.getActiveUser().getEmail();
+  const payload = { accion: "enviarSolicitudRevision", datos: { controles: controles }, usuario: usuario };
+  
+  const opciones = {
+    method: "post",
+    contentType: "application/json",
+    headers: { "Authorization": "Bearer " + ScriptApp.getOAuthToken() },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  };
+  
+  const resp = UrlFetchApp.fetch(CONFIG.WEB_APP_URL, opciones);
+  const textoRespuesta = resp.getContentText();
+  
+  if (textoRespuesta.trim().startsWith("<!DOCTYPE")) {
+    throw new Error("Error: El servidor devolvió HTML. Verifica permisos de Drive.");
+  }
+  
+  const resultado = JSON.parse(textoRespuesta);
+  if (!resultado.exito) throw new Error(resultado.error);
+  
+  return resultado.datos;
+}
+
+
+// --- 🔐 LÓGICA REAL DE ESCRITURA (En la Web App) ---
+
+function ejecutarLogicaEnviarSolicitudRevision(datosObj, usuario) {
+  const controles = datosObj.controles;
+  
+  try {
+    const emailUsuario = usuario;
+    const destinatario = obtenerDestinatariosLideres();
+    
+    const baseUrlWebApp = CONFIG.WEB_APP_URL;
+    const linkFirmas = baseUrlWebApp + "?modulo=informes";
+
+    const ssYodo = SpreadsheetApp.openById(CONFIG.APP_YODO.ID);
+    const hojaDup = ssYodo.getSheetByName(CONFIG.APP_YODO.HOJAS.DUPLICADOS);
+    const hojaRes = ssYodo.getSheetByName(CONFIG.APP_YODO.HOJAS.RESULTADOS);
+    const hojaRep = ssYodo.getSheetByName(CONFIG.APP_YODO.HOJAS.REPORTE); 
+    
+    const ssBR = SpreadsheetApp.openById(CONFIG.MUESTRAS_BR.ID);
+    const hojaBR = ssBR.getSheetByName(CONFIG.MUESTRAS_BR.HOJAS.MATRIZ);
+
+    if (!hojaRep) throw new Error("No se encontró la hoja 'Reporte analítico'.");
+
+    const getRealLastRow = (hoja, col) => {
+      const vals = hoja.getRange(1, col, hoja.getMaxRows(), 1).getValues();
+      for (let i = vals.length - 1; i >= 0; i--) {
+        if (vals[i][0] && String(vals[i][0]).trim() !== "") return i + 1;
+      }
+      return 1; 
+    };
+
+    const lrDup = hojaDup.getLastRow();
+    const datosDup = lrDup > 7 ? hojaDup.getRange(8, 1, lrDup - 7, 15).getValues() : [];
+    
+    const lrRes = hojaRes.getLastRow();
+    const datosRes = lrRes > 6 ? hojaRes.getRange(7, 1, lrRes - 6, 24).getValues() : [];
+    
+    const lrBR = hojaBR.getLastRow();
+    const datosBR = lrBR > 1 ? hojaBR.getRange(2, 1, lrBR - 1, 7).getValues() : [];
+
+    let lrRep = getRealLastRow(hojaRep, 1) + 1;
+    if (lrRep < 6) lrRep = 6; 
+
+    const hoy = new Date();
+    const hoyStr = Utilities.formatDate(hoy, Session.getScriptTimeZone(), "yyyy-MM-dd");
+
+    const formatDate = (date) => {
+      if (!date) return "N/A";
+      if (date instanceof Date) return Utilities.formatDate(date, Session.getScriptTimeZone(), "yyyy-MM-dd");
+      return String(date).substring(0, 10);
+    };
+
+    const aComa = (val) => {
+      if (val === null || val === undefined || val === "" || val === "NA" || val === "No aplica") return "No aplica";
+      return String(val).replace(/\./g, ',');
+    };
+
+    const colorear = (celda, texto) => {
+      let t = String(texto).toUpperCase();
+      if (t.includes("NO APLICA")) celda.setBackground(null).setFontColor(null).setFontWeight('normal');
+      else if (t.includes("NO CUMPLE")) celda.setBackground('#fef2f2').setFontColor('#dc2626').setFontWeight('bold');
+      else if (t.includes("CUMPLE")) celda.setBackground('#ecfdf5').setFontColor('#059669').setFontWeight('bold');
+    };
+
+    let tablaMuestrasHTML = "";
+
+    controles.forEach(ctrl => {
+      let brRecord = datosBR.find(r => String(r[0]).trim() === ctrl);
+      let fechaRecepcion = brRecord ? formatDate(brRecord[1]) : "N/A"; 
+      let producto = brRecord ? String(brRecord[3]).trim() : "N/A";    
+      let identificacion = brRecord ? String(brRecord[4]).trim() : "N/A"; 
+      let espec = brRecord ? String(brRecord[6]).trim() : "N/A";       
+
+      let historicosDup = datosDup.filter(r => String(r[1]).trim() === ctrl);
+      let ultimoDup = historicosDup.length > 0 ? historicosDup[historicosDup.length - 1] : null;
+      
+      let fechaAnalisis = ultimoDup ? formatDate(ultimoDup[0]) : "N/A";
+      let promedio = ultimoDup ? ultimoDup[10] : 0;
+      let unidad = ultimoDup ? ultimoDup[9] : "mg/kg";
+      let horrat = ultimoDup ? ultimoDup[13] : "N/A";
+      let confHorrat = ultimoDup ? String(ultimoDup[14]).trim() : "N/A";
+
+      let historicosRes = datosRes.filter(r => String(r[1]).trim() === ctrl);
+      let ultimoRes = historicosRes.length > 0 ? historicosRes[historicosRes.length - 1] : null;
+      
+      let limInf = ultimoRes ? String(ultimoRes[17]).trim() : "No aplica"; 
+      let limSup = ultimoRes ? String(ultimoRes[18]).trim() : "No aplica"; 
+
+      let conformidadRep = "No aplica";
+      if (limInf.toUpperCase() !== "NO APLICA" && limInf !== "NA" && limInf !== "") {
+        let pVal = parseFloat(String(promedio).replace(',', '.'));
+        let iVal = parseFloat(limInf.replace(',', '.'));
+        let sVal = parseFloat(limSup.replace(',', '.'));
+        
+        if (!isNaN(pVal) && !isNaN(iVal) && !isNaN(sVal)) {
+          if (pVal >= iVal && pVal <= sVal) conformidadRep = "Cumple";
+          else conformidadRep = "No cumple";
+        }
+      }
+
+      const filaReporte = [
+        ctrl, fechaRecepcion, producto, identificacion, hoyStr, fechaAnalisis, 
+        aComa(promedio), "mg/kg", espec, conformidadRep, "OK", "", emailUsuario, "", "", ""
+      ];
+
+      hojaRep.getRange(lrRep, 1, 1, filaReporte.length).setValues([filaReporte]);
+      colorear(hojaRep.getRange(lrRep, 10), conformidadRep); 
+      lrRep++;
+
+      let registroValido = historicosDup.find(r => String(r[2]).toUpperCase().includes("RUTINA") && String(r[14]).toUpperCase().includes("CUMPLE") && !String(r[14]).toUpperCase().includes("NO CUMPLE"));
+      if (!registroValido) {
+        registroValido = historicosDup.reverse().find(r => String(r[2]).toUpperCase().includes("VERIFICACI") && String(r[14]).toUpperCase().includes("CUMPLE") && !String(r[14]).toUpperCase().includes("NO CUMPLE"));
+      }
+
+      if (registroValido) {
+        let colorBadge = confHorrat.toUpperCase().includes("NO CUMPLE") ? "#dc2626" : "#059669";
+        let bgBadge = confHorrat.toUpperCase().includes("NO CUMPLE") ? "#fef2f2" : "#ecfdf5";
+        let promDisplay = parseFloat(String(promedio).replace(',','.')).toFixed(2);
+        if(isNaN(promDisplay)) promDisplay = promedio;
+
+        tablaMuestrasHTML += `
+          <tr>
+            <td style="padding:12px 10px; border-bottom:1px solid #e1e5eb; border-right:1px solid #e1e5eb; text-align:center;"><strong>${ctrl}</strong></td>
+            <td style="padding:12px 10px; border-bottom:1px solid #e1e5eb; border-right:1px solid #e1e5eb; text-align:left; color:#374151; font-size:12px; line-height:1.3;">${producto}</td>
+            <td style="padding:12px 10px; border-bottom:1px solid #e1e5eb; border-right:1px solid #e1e5eb; text-align:center; color:#0a4079; font-weight:bold; font-size:14px;">${promDisplay} <span style="font-size:10px; color:#6b7280; font-weight:normal;">${unidad}</span></td>
+            <td style="padding:12px 10px; border-bottom:1px solid #e1e5eb; border-right:1px solid #e1e5eb; text-align:center;">
+              <span style="font-size:14px; font-weight:bold; color:#374151;">${horrat}</span><br>
+              <span style="background-color:${bgBadge}; color:${colorBadge}; padding:3px 8px; border-radius:4px; font-size:9px; font-weight:bold; display:inline-block; margin-top:5px; text-transform:uppercase;">${confHorrat}</span>
+            </td>
+            <td style="padding:12px 10px; border-bottom:1px solid #e1e5eb; text-align:left; font-size:11px; color:#6b7280; line-height:1.3;">${espec}</td>
+          </tr>
+        `;
+      }
+    });
+
+    const cuerpoHTML = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <meta charset="UTF-8">
+    </head>
+    <body style="margin:0; padding:0; background-color:#f4f7f9; font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+    <div style="max-width:850px; margin:30px auto; background:#fff; border-radius:8px; border:1px solid #e1e5eb; overflow:hidden; box-shadow:0 4px 10px rgba(0,0,0,0.05);">
+      
+      <div style="background:#0a4079; padding:20px; text-align:center; border-bottom:4px solid #afcc46;">
+        <h2 style="margin:0; font-size:18px; color:#fff; text-transform:uppercase; letter-spacing:1px;">Revisión de Informe Analítico</h2>
+      </div>
+      
+      <div style="padding:30px; color:#333; font-size:13px; line-height:1.6;">
+        <p style="margin-top:0;">Estimados líderes de área,</p>
+        <p>El analista <strong style="color:#0a4079;">${emailUsuario}</strong> ha solicitado la revisión y aprobación de los siguientes controles para el análisis de <strong>Yodo</strong>:</p>
+        
+        <table style="width:100%; border-collapse:collapse; margin-top:25px; margin-bottom:25px; border:1px solid #e1e5eb;">
+          <thead>
+            <tr>
+              <th style="background:#f8f9fa; color:#0a4079; padding:12px 10px; font-size:11px; text-transform:uppercase; border-bottom:2px solid #e1e5eb; text-align:center; width:12%; border-right:1px solid #e1e5eb;">Control</th>
+              <th style="background:#f8f9fa; color:#0a4079; padding:12px 10px; font-size:11px; text-transform:uppercase; border-bottom:2px solid #e1e5eb; text-align:left; width:28%; border-right:1px solid #e1e5eb;">Producto</th>
+              <th style="background:#f8f9fa; color:#0a4079; padding:12px 10px; font-size:11px; text-transform:uppercase; border-bottom:2px solid #e1e5eb; text-align:center; width:15%; border-right:1px solid #e1e5eb;">Promedio</th>
+              <th style="background:#f8f9fa; color:#0a4079; padding:12px 10px; font-size:11px; text-transform:uppercase; border-bottom:2px solid #e1e5eb; text-align:center; width:15%; border-right:1px solid #e1e5eb;">HorRat(r)</th>
+              <th style="background:#f8f9fa; color:#0a4079; padding:12px 10px; font-size:11px; text-transform:uppercase; border-bottom:2px solid #e1e5eb; text-align:left; width:30%;">Especificación</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${tablaMuestrasHTML}
+          </tbody>
+        </table>
+
+        <p style="color:#6b7280; font-style:italic; margin-bottom:25px; text-align:center;">Por favor, revise los datos primarios y proceda con la aprobación de los mismos en caso de estar todo conforme a lo establecido en el procedimiento interno.</p>
+        
+        <div style="text-align:center;">
+          <a href="${linkFirmas}" style="display:inline-block; background:#00abe6; color:#fff; text-decoration:none; padding:14px 35px; border-radius:6px; font-weight:bold; font-size:13px; text-transform:uppercase; box-shadow:0 2px 4px rgba(0,171,230,0.3);">Revisar y Firmar</a>
+        </div>
+      </div>
+      
+      <div style="background:#f8f9fa; padding:15px; font-size:11px; color:#6b7280; text-align:center; border-top:1px solid #e1e5eb;">
+        Sistema de Gestión de Calidad - Mérieux NutriSciences Colombia
+      </div>
+      
+    </div>
+    </body>
+    </html>
+    `;
+
+    MailApp.sendEmail({
+      to: destinatario,
+      subject: `Solicitud de Aprobación Analítica - Yodo`,
+      htmlBody: cuerpoHTML
+    });
+
+    return "Reporte analítico generado y solicitud de revisión enviada exitosamente al líder.";
+  } catch (err) {
+    throw new Error("Error enviando la solicitud y registrando reporte: " + err.message);
+  }
+}

@@ -1,0 +1,905 @@
+<!-- form_Curva.html -->
+
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <style>
+    :root {
+      --lima: #afcc46;
+      --cian: #00abe6;
+      --azul-oscuro: #0a4079;
+      --gris: #6b7280;
+      --fondo: #f4f7f9;
+      --error: #ef4444;
+      --success: #10b981;
+    }
+
+    body { font-family: 'Segoe UI', sans-serif; background: var(--fondo); margin: 0; padding: 0; color: #333; }
+    
+    .modal-header { background: var(--azul-oscuro); color: white; padding: 15px; text-align: center; border-bottom: 4px solid var(--lima); position: sticky; top: 0; z-index: 10; }
+    .modal-header h2 { margin: 0; font-size: 16px; text-transform: uppercase; letter-spacing: 1px; }
+
+    /* Stepper (Wizard) */
+    .stepper { display: flex; justify-content: center; padding: 15px 0; background: white; border-bottom: 1px solid #e1e5eb; }
+    .step { display: flex; align-items: center; font-size: 11px; font-weight: 700; color: var(--gris); text-transform: uppercase; cursor: default; }
+    .step.active { color: var(--azul-oscuro); }
+    .step-number { display: flex; justify-content: center; align-items: center; width: 22px; height: 22px; border-radius: 50%; background: #e2e8f0; color: var(--gris); margin-right: 8px; }
+    .step.active .step-number { background: var(--cian); color: white; }
+    .step-divider { width: 30px; height: 2px; background: #e2e8f0; margin: 0 15px; }
+
+    .content { padding: 15px; padding-bottom: 80px; }
+    .segmento { display: none; }
+    .segmento.active { display: block; animation: fadeIn 0.4s; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+    .card { background: white; border-radius: 8px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #e1e5eb; }
+    .card-title { font-size: 10px; font-weight: 800; color: var(--gris); text-transform: uppercase; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+    .card-title::before { content: ""; width: 3px; height: 10px; background: var(--cian); border-radius: 5px; }
+
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .grid-4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 10px; }
+    .field { margin-bottom: 10px; }
+    
+    label { display: block; font-size: 11px; font-weight: 700; color: var(--azul-oscuro); margin-bottom: 4px; }
+    .radio-label { display: inline-flex; align-items: center; font-weight: 500; color: #475569; font-size: 11px; cursor: pointer; gap: 4px; }
+
+    input[type="text"], input[type="number"], select { width: 100%; padding: 8px 10px; border: 1px solid #ced4da; border-radius: 5px; font-size: 12px; box-sizing: border-box; transition: all 0.2s; }
+    input:focus, select:focus { border-color: var(--cian); outline: none; box-shadow: 0 0 0 3px rgba(0,171,230,0.1); }
+    input[type="radio"] { accent-color: var(--azul-oscuro); cursor: pointer; margin: 0; }
+    
+    .read-only { background-color: #f1f5f9 !important; color: #475569; font-weight: 600; cursor: not-allowed; }
+    .highlight-calc { background-color: #ecfdf5 !important; color: #059669; font-weight: 800; border-color: #10b981; }
+    .invalid { border: 1.5px solid var(--error) !important; background-color: #fff5f5 !important; }
+
+    .badge { width: 100%; padding: 12px; border-radius: 5px; text-align: center; font-weight: 800; font-size: 12px; background: #eee; border: 1px solid #ddd; text-transform: uppercase; transition: all 0.3s; }
+    .badge-conforme { background: #ecfdf5 !important; color: #059669 !important; border-color: #10b981 !important; }
+    .badge-noconforme { background: #fef2f2 !important; color: #dc2626 !important; border-color: #ef4444 !important; }
+
+    /* ====== CUSTOM DROPDOWN Y BOTÓN "X" ====== */
+    .dropdown-container { position: relative; width: 100%; }
+    .dropdown-container input { padding-right: 45px; cursor: text; }
+    .dropdown-chevron { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 10px; color: var(--azul-oscuro); pointer-events: none; }
+    .clear-btn { position: absolute; right: 24px; top: 50%; transform: translateY(-50%); font-size: 11px; color: var(--error); cursor: pointer; display: none; z-index: 5; background: white; border-radius: 50%; width: 16px; height: 16px; text-align: center; line-height: 16px; font-weight: bold; }
+    .clear-btn:hover { background: #fef2f2; transform: translateY(-50%) scale(1.1); }
+    
+    /* Configuración para que el menú flote por encima de la tabla */
+    .dropdown-list { display: none; position: absolute; left: 0; right: 0; background: white; border: 1px solid var(--cian); border-radius: 5px; max-height: 160px; overflow-y: auto; z-index: 9999; text-align: left; }
+    .dropdown-list.show { display: block; }
+    .dropdown-option { padding: 10px 12px; font-size: 12px; cursor: pointer; border-bottom: 1px solid #f1f5f9; transition: background 0.2s; }
+    .dropdown-option:last-child { border-bottom: none; }
+    .dropdown-option:hover { background: #f4f7f9; color: var(--azul-oscuro); font-weight: 700; }
+    .no-results { padding: 10px 12px; font-size: 11px; color: var(--gris); font-style: italic; text-align: center; }
+
+    /* ====== TABLA DE CURVA ====== */
+    /* Permite que el menú desplegable salga visualmente de la tabla */
+    .table-container { overflow: visible; margin-top: 10px; border: 1px solid #e1e5eb; border-radius: 6px; }
+    table { width: 100%; border-collapse: collapse; min-width: 600px; background: white; }
+    th { background: #f8f9fa; color: var(--azul-oscuro); padding: 10px; font-size: 11px; text-align: center; border-bottom: 2px solid #e1e5eb; font-weight: 700; }
+    td { padding: 6px 8px; font-size: 11px; border-bottom: 1px solid #e1e5eb; text-align: center; vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    .td-input { width: 100%; text-align: center; font-size: 11px; padding: 6px; }
+
+    .btn-icon { background: #f1f5f9; border: 1px solid #ced4da; border-radius: 4px; cursor: pointer; font-size: 11px; padding: 4px 8px; margin: 0 2px; transition: 0.2s; color: var(--azul-oscuro); font-weight: bold;}
+    .btn-icon:hover { background: var(--azul-oscuro); color: white; border-color: var(--azul-oscuro); }
+    .btn-icon-red:hover { background: var(--error); color: white; border-color: var(--error); }
+
+    .footer { display: flex; justify-content: space-between; padding: 15px; background: white; border-top: 1px solid #e1e5eb; position: fixed; bottom: 0; width: 100%; box-sizing: border-box; z-index: 10;}
+    button { padding: 10px 20px; border-radius: 5px; font-weight: 700; cursor: pointer; font-size: 12px; transition: 0.2s; border: none; }
+    .btn-cancel { background: transparent; border: 1px solid var(--gris); color: var(--gris); }
+    .btn-next { background: var(--azul-oscuro); color: white; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .btn-next:hover { background: #0d4d8d; }
+
+    /* ====== SPINNERS Y PANTALLA DE CARGA ====== */
+    #loader, #mini-loader { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(255, 255, 255, 0.9); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 1000; }
+    #mini-loader { background: rgba(255, 255, 255, 0.7); display: none; z-index: 2000; }
+    .spinner { width: 40px; height: 40px; border-radius: 50%; border: 4px solid transparent; border-top-color: var(--azul-oscuro); border-right-color: var(--lima); border-bottom-color: var(--cian); border-left-color: var(--gris); animation: spin 0.9s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    #overlay-submit {
+      display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(4px); z-index: 3000;
+      flex-direction: column; justify-content: center; align-items: center; text-align: center;
+      animation: fadeInOverlay 0.3s ease-in-out;
+    }
+    @keyframes fadeInOverlay { from { opacity: 0; } to { opacity: 1; } }
+    .submit-spinner { width: 55px; height: 55px; border-radius: 50%; border: 5px solid #e1e5eb; border-top-color: var(--azul-oscuro); border-bottom-color: var(--lima); animation: spin 1s linear infinite; margin-bottom: 20px; }
+    .submit-icon-success { display: none; font-size: 65px; margin-bottom: 10px; animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+    @keyframes popIn { 0% { transform: scale(0.3); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+    .submit-title { font-size: 18px; font-weight: 800; color: var(--azul-oscuro); margin: 0 0 8px 0; transition: color 0.3s;}
+    .submit-text { font-size: 13px; color: var(--gris); margin: 0; font-weight: 500;}
+
+    /* Toasts */
+    #toast-container { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 9999; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+    .toast { padding: 10px 20px; border-radius: 6px; color: white; font-size: 12px; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,0.15); opacity: 0; transform: translateY(-20px); transition: all 0.3s ease-out; display: flex; align-items: center; gap: 8px; }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast-error { background-color: var(--error); }
+    
+    .data-box { background: #f8f9fa; border: 1px solid #ced4da; padding: 10px; border-radius: 6px; text-align: center; }
+    .data-box span { display: block; font-size: 16px; font-weight: 800; color: var(--azul-oscuro); margin-top: 5px; }
+    .chart-container { position: relative; height: 250px; width: 100%; margin-top: 15px; }
+  </style>
+</head>
+<body>
+
+  <div id="toast-container"></div>
+  <div id="loader">
+    <div class="spinner"></div>
+    <p style="margin-top:15px; font-size:12px; font-weight:700; color:var(--azul-oscuro)">Cargando inventarios y trazabilidad...</p>
+  </div>
+  <div id="mini-loader">
+    <div class="spinner" style="width:25px; height:25px; border-width:3px;"></div>
+    <p style="margin-top:10px; font-size:11px; font-weight:700; color:var(--azul-oscuro)">Procesando...</p>
+  </div>
+
+  <div id="overlay-submit">
+    <div class="submit-spinner" id="submit-spinner"></div>
+    <div class="submit-icon-success" id="submit-icon-success">✅</div>
+    <h3 class="submit-title" id="submit-title">Guardando curva...</h3>
+    <p class="submit-text" id="submit-text">Por favor, no cierre la ventana.</p>
+  </div>
+
+  <div class="modal-header"><h2>Curva de Calibración</h2></div>
+
+  <div class="stepper">
+    <div class="step active" id="step1"><div class="step-number">1</div> Preparación</div>
+    <div class="step-divider"></div>
+    <div class="step" id="step2"><div class="step-number">2</div> Resultados</div>
+  </div>
+
+  <!-- ================= SEGMENTO I ================= -->
+  <div class="content segmento active" id="segmento1">
+    
+    <div class="card">
+      <div class="card-title">Información General y Solución Estándar (Madre)</div>
+      <div class="grid">
+        <div class="field">
+          <label>Fecha y Hora</label>
+          <input type="text" id="fechaHora" class="read-only" readonly>
+        </div>
+        <div class="field">
+          <label>Lote, Estándar Yoduro 1000 ppm</label>
+          <select id="loteYoduro" onchange="cargarDetallesLote()">
+            <option value="">Seleccione un lote...</option>
+          </select>
+        </div>
+      </div>
+      
+      <div class="grid-4" style="margin-top:10px;">
+        <div class="field"><label>Balanza Usada</label><input type="text" id="balanza" class="read-only" readonly placeholder="-"></div>
+        <div class="field"><label>Peso KI [mg]</label><input type="text" id="pesoKi" class="read-only" readonly placeholder="-"></div>
+        <div class="field"><label>Balón Vol.</label><input type="text" id="balonStd" class="read-only" readonly placeholder="-"></div>
+        <div class="field"><label>Concentración</label><input type="text" id="concStd" class="read-only highlight-calc" readonly placeholder="Auto"></div>
+      </div>
+      <input type="hidden" id="volStdVal"> 
+    </div>
+
+    <div class="card">
+      <div class="card-title">Solución Intermedia (Aprox. 50 ppm)</div>
+      <p style="font-size:10px; color:var(--gris); margin-top:-5px; margin-bottom:12px;">Dilución de 5 mL de Sol. Estándar aforados a 100 mL.</p>
+      
+      <div class="grid">
+        <div class="field">
+          <label style="margin-bottom:6px;">Instrumento (Alícuota 5 mL)</label>
+          <div style="display:flex; gap:10px; margin-bottom:6px;">
+            <label class="radio-label"><input type="radio" name="tipo_Int" value="micro" onchange="cambiarTipoInst('Int')" checked> Micro</label>
+            <label class="radio-label"><input type="radio" name="tipo_Int" value="pipeta" onchange="cambiarTipoInst('Int')"> Pipeta (5 mL)</label>
+          </div>
+          <div class="dropdown-container">
+            <input type="text" id="inst_Int" placeholder="Buscar instrumento..." autocomplete="off" onfocus="mostrarOpciones('lista_Int', 'inst_Int')" oninput="filtrarOpciones('lista_Int', 'inst_Int')">
+            <span class="clear-btn" id="clear_inst_Int" onclick="limpiarDropdown('lista_Int', 'inst_Int')">✖</span>
+            <span class="dropdown-chevron">▼</span>
+            <div class="dropdown-list" id="lista_Int"></div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label style="margin-bottom:6px;">Balón Volumétrico (100 mL)</label>
+          <div class="dropdown-container" style="margin-top: 24px;">
+            <input type="text" id="balonInt" placeholder="Buscar balón..." autocomplete="off" onfocus="mostrarOpciones('listaBalonesInt', 'balonInt')" oninput="filtrarOpciones('listaBalonesInt', 'balonInt')">
+            <span class="clear-btn" id="clear_balonInt" onclick="limpiarDropdown('listaBalonesInt', 'balonInt')">✖</span>
+            <span class="dropdown-chevron">▼</span>
+            <div class="dropdown-list" id="listaBalonesInt"></div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="field" style="margin-top: 10px;">
+        <label>Concentración Resultante [ppm]</label>
+        <input type="text" id="concInt" class="read-only highlight-calc" readonly placeholder="Calculado automáticamente">
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Niveles de la Curva de Calibración</div>
+      <p style="font-size:10px; color:var(--gris); margin-top:-5px; margin-bottom:5px;">Aforo: 100 mL para cada nivel.</p>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 7%;">Nivel</th>
+              <th style="width: 22%;">Micro / Pipeta</th>
+              <th style="width: 20%;">Balón Vol. (100 mL)</th>
+              <th style="width: 9%;">Alícuota [mL]</th>
+              <th style="width: 15%;">Conc. [ppm]</th>
+              <th style="width: 15%;">Log(Conc.)</th>
+              <th style="width: 12%;">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyCurva"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= SEGMENTO II ================= -->
+  <div class="content segmento" id="segmento2">
+    
+    <div class="card">
+      <div class="card-title">Equipo de Medición (pH-metro)</div>
+      <div class="grid">
+        <div class="field">
+          <label>Código pH-metro</label>
+          <select id="eqPh" onchange="verificarEquipo()"></select>
+        </div>
+        <div class="field">
+          <label>Área</label>
+          <input type="text" id="eqArea" class="read-only" readonly>
+        </div>
+      </div>
+      <div class="field" style="margin-top:5px;">
+        <label>Verificación Diaria (Hoy)</label>
+        <input type="text" id="eqVerificacion" class="read-only" readonly style="font-weight:800;" placeholder="Buscando...">
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Resultados de Lectura</div>
+      <p style="font-size:10px; color:var(--gris); margin-top:-5px; margin-bottom:10px;">La lectura del Blanco se restará automáticamente de los demás niveles.</p>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 10%;">Nivel</th>
+              <th style="width: 20%;">Concentración [ppm]</th>
+              <th style="width: 20%;">Log(Conc.)</th>
+              <th style="width: 25%;">Lectura Directa [mV]</th>
+              <th style="width: 25%;">Lectura Corregida [mV]</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyResultados"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Análisis Estadístico (Regresión Lineal)</div>
+      <div class="grid-4">
+        <div class="data-box"><small>Pendiente (a)</small><span id="res_a">-</span></div>
+        <div class="data-box"><small>Intercepto (b)</small><span id="res_b">-</span></div>
+        <div class="data-box"><small>R²</small><span id="res_r2">-</span></div>
+        <div class="field" style="display:flex; flex-direction:column; justify-content:center; align-items:center;">
+          <small style="font-weight:700; color:var(--gris); font-size:10px;">Conformidad (R² ≥ 0,990)</small>
+          <div id="badgeCurva" class="badge" style="margin-top:5px; padding:10px;">Pendiente</div>
+        </div>
+      </div>
+      <div class="field" style="margin-top:15px; text-align:center;">
+        <span style="font-size:12px; font-style:italic; color:var(--gris);">Ecuación de la recta: <strong style="color:var(--azul-oscuro);" id="ecuacion">y = ax + b</strong></span>
+      </div>
+      <div class="chart-container">
+        <canvas id="graficaCurva"></canvas>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="footer">
+    <button type="button" class="btn-cancel" id="btnAtras" onclick="irAtras()" style="display:none;">← ATRÁS</button>
+    <button type="button" class="btn-cancel" id="btnCerrar" onclick="google.script.host.close()">CANCELAR</button>
+    
+    <button type="button" class="btn-next" id="btnSiguiente" onclick="irSiguiente()">SIGUIENTE →</button>
+    <button type="button" class="btn-next" id="btnFinalizar" onclick="finalizarCurva()" style="display:none;">GUARDAR CURVA</button>
+  </div>
+
+  <script>
+    let dataMicropipetas = [], dataPipetas = [], dataPipetas5mL = [], dataBalones = [], dataEquiposPh = [];
+    const FACTOR_KI = 0.76447, VOLUMEN_FINAL_CURVA = 100; 
+    let chartInstance = null; 
+
+    let niveles = [
+      { tipo: 'fijo', nombre: "Blanco", alicuota: 0.0, conc: 0, log: "N/A", mv: "", tipoInst: "micro", inst: "", balon: "" },
+      { tipo: 'fijo', nombre: "1", alicuota: 0.1, conc: 0, log: 0, mv: "", tipoInst: "micro", inst: "", balon: "" },
+      { tipo: 'fijo', nombre: "2", alicuota: 0.5, conc: 0, log: 0, mv: "", tipoInst: "micro", inst: "", balon: "" },
+      { tipo: 'fijo', nombre: "3", alicuota: 1.0, conc: 0, log: 0, mv: "", tipoInst: "micro", inst: "", balon: "" },
+      { tipo: 'fijo', nombre: "4", alicuota: 2.0, conc: 0, log: 0, mv: "", tipoInst: "micro", inst: "", balon: "" },
+      { tipo: 'fijo', nombre: "5", alicuota: 5.0, conc: 0, log: 0, mv: "", tipoInst: "micro", inst: "", balon: "" }
+    ];
+
+    window.onload = () => {
+      const ahora = new Date();
+      document.getElementById('fechaHora').value = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, '0')}-${String(ahora.getDate()).padStart(2, '0')} - ${String(ahora.getHours()).padStart(2, '0')}:${String(ahora.getMinutes()).padStart(2, '0')}`;
+      
+      google.script.run
+        .withSuccessHandler(inicializarFormulario)
+        .withFailureHandler(err => { alert("Error: " + err.message); document.getElementById('loader').style.display='none'; })
+        .obtenerDatosInicialesCurva();
+    };
+
+    function mostrarToastError(msg) {
+      const t = document.getElementById('toast-container');
+      const d = document.createElement('div');
+      d.className = 'toast toast-error';
+      d.innerHTML = `⚠️ ${msg}`;
+      t.appendChild(d);
+      setTimeout(() => d.classList.add('show'), 10);
+      setTimeout(() => { d.classList.remove('show'); setTimeout(() => d.remove(), 300); }, 3500);
+    }
+
+    function inicializarFormulario(datos) {
+      dataMicropipetas = datos.micropipetas;
+      dataPipetas = datos.pipetas;
+      dataPipetas5mL = datos.pipetas5mL; 
+      dataBalones = datos.balones;
+      dataEquiposPh = datos.equiposPh;
+
+      poblarListaCombo(dataBalones, 'listaBalonesInt', 'balonInt');
+
+      const selYod = document.getElementById('loteYoduro');
+      datos.lotesYoduro.forEach(l => { selYod.innerHTML += `<option value="${l}">${l}</option>`; });
+
+      const selEqPh = document.getElementById('eqPh');
+      dataEquiposPh.forEach(eq => { selEqPh.innerHTML += `<option value="${eq.codigo}">${eq.codigo}</option>`; });
+      document.getElementById('eqArea').value = dataEquiposPh[0].area;
+
+      renderizarTabla();
+      actualizarDropdown('Int');
+      document.getElementById('loader').style.display = 'none';
+
+      document.addEventListener('click', e => {
+        if (!e.target.closest('.dropdown-container')) document.querySelectorAll('.dropdown-list').forEach(l => l.classList.remove('show'));
+      });
+    }
+
+    function cambiarTipoInst(id) {
+      const inputEl = document.getElementById(`inst_${id}`);
+      if(inputEl) {
+        inputEl.value = ''; 
+        document.getElementById(`clear_inst_${id}`).style.display = 'none';
+      }
+      actualizarDropdown(id);
+    }
+
+    function actualizarDropdown(id) {
+      const selector = document.querySelector(`input[name="tipo_${id}"]:checked`);
+      if(!selector) return;
+      let arr = (selector.value === 'micro') ? dataMicropipetas : ((id === 'Int') ? dataPipetas5mL : dataPipetas);
+      poblarListaCombo(arr, `lista_${id}`, `inst_${id}`);
+    }
+
+    function guardarEstadoTabla() {
+      niveles.forEach((nivel, idx) => {
+        if (idx !== 0) {
+          const radioSel = document.querySelector(`input[name="tipo_${idx}"]:checked`);
+          if (radioSel) nivel.tipoInst = radioSel.value;
+          
+          const inputInst = document.getElementById(`inst_${idx}`);
+          if (inputInst) nivel.inst = inputInst.value;
+        }
+        
+        const inputBalon = document.getElementById(`balon_${idx}`);
+        if (inputBalon) nivel.balon = inputBalon.value;
+      });
+    }
+
+    function renderizarTabla() {
+      const tbody = document.getElementById('tbodyCurva');
+      tbody.innerHTML = '';
+      
+      niveles.forEach((nivel, idx) => {
+        const isFijo = (nivel.tipo === 'fijo');
+        
+        let classAli = isFijo ? 'td-input read-only' : 'td-input';
+        let readOnlyAttr = isFijo ? 'readonly' : '';
+        if (nivel.tipo === 'extra') {
+          const prevBound = niveles[idx - 1] ? niveles[idx - 1].alicuota : 0;
+          const nextBound = niveles[idx + 1] ? niveles[idx + 1].alicuota : Infinity;
+          if (nivel.alicuota <= prevBound || nivel.alicuota >= nextBound) classAli += ' invalid';
+        }
+        
+        let botones = `<button class="btn-icon" onclick="agregarNivel(${idx})" title="Insertar punto debajo">+</button>`;
+        if (!isFijo) botones += `<button class="btn-icon btn-icon-red" onclick="quitarNivel(${idx})" title="Eliminar punto">-</button>`;
+
+        let instHTML = (idx === 0) ? `<input type="text" class="td-input read-only" readonly value="N/A">` : 
+          `<div style="display:flex; justify-content:center; gap:8px; margin-bottom:4px;">
+            <label class="radio-label"><input type="radio" name="tipo_${idx}" value="micro" onchange="cambiarTipoInst('${idx}')" ${nivel.tipoInst === 'micro' ? 'checked' : ''}> Micro</label>
+            <label class="radio-label"><input type="radio" name="tipo_${idx}" value="pipeta" onchange="cambiarTipoInst('${idx}')" ${nivel.tipoInst === 'pipeta' ? 'checked' : ''}> Pipeta</label>
+          </div>
+          <div class="dropdown-container">
+            <input type="text" id="inst_${idx}" class="td-input" placeholder="Buscar..." autocomplete="off" onfocus="mostrarOpciones('lista_${idx}', 'inst_${idx}')" oninput="filtrarOpciones('lista_${idx}', 'inst_${idx}')" value="${nivel.inst}">
+            <span class="clear-btn" id="clear_inst_${idx}" onclick="limpiarDropdown('lista_${idx}', 'inst_${idx}')" style="${nivel.inst ? 'display:block' : 'display:none'}">✖</span>
+            <span class="dropdown-chevron">▼</span><div class="dropdown-list" id="lista_${idx}"></div>
+          </div>`;
+
+        let balonHTML = `<div class="dropdown-container">
+            <input type="text" id="balon_${idx}" class="td-input" placeholder="Buscar..." autocomplete="off" onfocus="mostrarOpciones('lista_balon_${idx}', 'balon_${idx}')" oninput="filtrarOpciones('lista_balon_${idx}', 'balon_${idx}')" value="${nivel.balon}">
+            <span class="clear-btn" id="clear_balon_${idx}" onclick="limpiarDropdown('lista_balon_${idx}', 'balon_${idx}')" style="${nivel.balon ? 'display:block' : 'display:none'}">✖</span>
+            <span class="dropdown-chevron">▼</span><div class="dropdown-list" id="lista_balon_${idx}"></div>
+          </div>`;
+
+        tbody.innerHTML += `
+          <tr>
+            <td><strong>${nivel.nombre}</strong></td>
+            <td>${instHTML}</td><td>${balonHTML}</td>
+            <td><input type="number" id="ali_${idx}" class="${classAli}" ${readOnlyAttr} value="${nivel.alicuota}" step="0.1" oninput="actualizarAlicuota(${idx}, this.value)"></td>
+            <td><strong id="conc_${idx}" style="color:var(--azul-oscuro);">-</strong></td>
+            <td><span id="log_${idx}" style="color:var(--gris); font-family:monospace;">-</span></td>
+            <td>${botones}</td>
+          </tr>
+        `;
+      });
+      recalcularCurva();
+      
+      if (dataBalones.length > 0) {
+        niveles.forEach((_, idx) => {
+          if (idx !== 0) actualizarDropdown(idx); 
+          poblarListaCombo(dataBalones, `lista_balon_${idx}`, `balon_${idx}`);
+        });
+      }
+    }
+
+    function actualizarAlicuota(idx, val) {
+      const numVal = parseFloat(val);
+      niveles[idx].alicuota = isNaN(numVal) ? 0 : numVal;
+
+      if (niveles[idx].tipo === 'extra') {
+        const inputEl = document.getElementById(`ali_${idx}`);
+        const prevBound = niveles[idx - 1] ? niveles[idx - 1].alicuota : 0;
+        const nextBound = niveles[idx + 1] ? niveles[idx + 1].alicuota : Infinity;
+        if (niveles[idx].alicuota <= prevBound || niveles[idx].alicuota >= nextBound) inputEl.classList.add('invalid');
+        else inputEl.classList.remove('invalid');
+      }
+      recalcularCurva();
+    }
+
+    function agregarNivel(idx) {
+      guardarEstadoTabla(); 
+      const prevVal = niveles[idx].alicuota;
+      const nextVal = niveles[idx + 1] ? niveles[idx + 1].alicuota : prevVal + 1.0;
+      const defaultAlicuota = parseFloat(((prevVal + nextVal) / 2).toFixed(2));
+      niveles.splice(idx + 1, 0, { tipo: 'extra', nombre: 'Extra', alicuota: defaultAlicuota, conc: 0, log: 0, mv: "", tipoInst: "micro", inst: "", balon: "" });
+      renderizarTabla();
+    }
+    
+    function quitarNivel(idx) { 
+      guardarEstadoTabla(); 
+      niveles.splice(idx, 1); 
+      renderizarTabla(); 
+    }
+
+    function cargarDetallesLote() {
+      const lote = document.getElementById('loteYoduro').value;
+      if (!lote) { limpiarCalculos(); return; }
+      document.getElementById('mini-loader').style.display = 'flex';
+      
+      google.script.run
+        .withSuccessHandler(res => {
+          document.getElementById('pesoKi').value = res.pesoKI;
+          document.getElementById('balanza').value = res.balanzaKI;
+          document.getElementById('balonStd').value = res.balonInstrumental;
+          document.getElementById('volStdVal').value = res.volumenAgua; 
+          recalcularCurva(); 
+          document.getElementById('mini-loader').style.display = 'none';
+        }).withFailureHandler(err => { 
+          mostrarToastError(err.message); 
+          limpiarCalculos(); 
+          document.getElementById('mini-loader').style.display = 'none'; 
+        })
+        .obtenerDetallesLote(lote);
+    }
+
+    function recalcularCurva() {
+      const pesoMg = parseFloat(document.getElementById('pesoKi').value) || 0;
+      const volStdMl = parseFloat(document.getElementById('volStdVal').value) || 100;
+      
+      let concMadre = 0, concInt = 0;
+      if (pesoMg > 0) {
+        concMadre = (pesoMg * FACTOR_KI * 1000) / volStdMl;
+        document.getElementById('concStd').value = concMadre.toFixed(1);
+        concInt = (concMadre * 5.0) / 100; 
+        document.getElementById('concInt').value = concInt.toFixed(2);
+      } else {
+        document.getElementById('concStd').value = ""; document.getElementById('concInt').value = "";
+      }
+
+      niveles.forEach((nivel, idx) => {
+        nivel.conc = 0; nivel.log = "N/A";
+        if (nivel.alicuota > 0 && concInt > 0) {
+          nivel.conc = (concInt * nivel.alicuota) / VOLUMEN_FINAL_CURVA;
+          nivel.log = Math.log10(nivel.conc).toFixed(4);
+        }
+        const tdConc = document.getElementById(`conc_${idx}`);
+        const tdLog = document.getElementById(`log_${idx}`);
+        if(tdConc) tdConc.innerText = nivel.conc > 0 ? nivel.conc.toFixed(3) : "-";
+        if(tdLog) tdLog.innerText = nivel.log;
+      });
+    }
+
+    function limpiarCalculos() {
+      document.getElementById('pesoKi').value = ""; 
+      document.getElementById('balanza').value = "";
+      document.getElementById('balonStd').value = ""; 
+      document.getElementById('concStd').value = ""; 
+      document.getElementById('concInt').value = "";
+      niveles.forEach((_, idx) => {
+        const tdConc = document.getElementById(`conc_${idx}`), tdLog = document.getElementById(`log_${idx}`);
+        if(tdConc) tdConc.innerText = "-"; if(tdLog) tdLog.innerText = "-";
+      });
+    }
+
+    // ================= FUNCIONES DEL DROPDOWN MEJORADO =================
+    function poblarListaCombo(arr, listId, inputId) {
+      const lista = document.getElementById(listId); lista.innerHTML = '';
+      if(arr.length === 0) { lista.innerHTML = '<div class="no-results">Sin datos</div>'; return; }
+      arr.forEach(item => {
+        let div = document.createElement('div'); div.className = 'dropdown-option'; div.innerText = item;
+        div.onclick = () => { 
+          document.getElementById(inputId).value = item; 
+          document.getElementById(inputId).classList.remove('invalid'); 
+          lista.classList.remove('show');
+          const clearBtn = document.getElementById('clear_' + inputId);
+          if (clearBtn) clearBtn.style.display = 'block';
+        };
+        lista.appendChild(div);
+      });
+    }
+
+    function mostrarOpciones(listId, inputId) { 
+      document.getElementById(listId).classList.add('show'); 
+      filtrarOpciones(listId, inputId); 
+    }
+
+    function filtrarOpciones(listId, inputId) {
+      const inputVal = document.getElementById(inputId).value.toUpperCase();
+      const lista = document.getElementById(listId);
+      const opciones = lista.getElementsByClassName('dropdown-option');
+      let visibles = 0;
+      
+      for (let i = 0; i < opciones.length; i++) {
+        if (opciones[i].innerText.toUpperCase().indexOf(inputVal) > -1) { 
+          opciones[i].style.display = ""; visibles++; 
+        } else { 
+          opciones[i].style.display = "none"; 
+        }
+      }
+      
+      let noRes = lista.querySelector('.no-results');
+      if (visibles === 0 && opciones.length > 0) { 
+        if (!noRes) { noRes = document.createElement('div'); noRes.className = 'no-results'; noRes.innerText = 'Sin coincidencias'; lista.appendChild(noRes); }
+      } else if(noRes && visibles > 0) { noRes.remove(); }
+
+      // Mostrar u ocultar la X
+      const clearBtn = document.getElementById('clear_' + inputId);
+      if(clearBtn) clearBtn.style.display = inputVal ? 'block' : 'none';
+
+      // ================= CÁLCULO INTELIGENTE DE POSICIÓN (Arriba / Abajo) =================
+      const rect = document.getElementById(inputId).getBoundingClientRect();
+      const windowHeight = window.innerHeight;
+      
+      if (rect.bottom + 160 > windowHeight && rect.top > 160) {
+        // Se sale por abajo, así que lo lanzamos hacia arriba
+        lista.style.top = 'auto';
+        lista.style.bottom = '100%';
+        lista.style.marginTop = '0';
+        lista.style.marginBottom = '4px';
+        lista.style.boxShadow = '0 -4px 12px rgba(0,0,0,0.15)';
+      } else {
+        // Despliegue normal hacia abajo
+        lista.style.top = '100%';
+        lista.style.bottom = 'auto';
+        lista.style.marginTop = '4px';
+        lista.style.marginBottom = '0';
+        lista.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+      }
+    }
+
+    function limpiarDropdown(listId, inputId) {
+      const input = document.getElementById(inputId);
+      input.value = '';
+      input.focus();
+      filtrarOpciones(listId, inputId);
+    }
+    // =================================================================================
+
+    function irSiguiente() {
+      guardarEstadoTabla();
+      
+      const errores = document.querySelectorAll('#segmento1 .invalid');
+      if (errores.length > 0) {
+        mostrarToastError("Corrige los volúmenes en rojo."); return;
+      }
+      if(!document.getElementById('loteYoduro').value) {
+        mostrarToastError("Debe seleccionar un lote de estándar."); return;
+      }
+
+      document.getElementById('segmento1').classList.remove('active');
+      document.getElementById('segmento2').classList.add('active');
+      document.getElementById('step1').classList.remove('active');
+      document.getElementById('step2').classList.add('active');
+
+      document.getElementById('btnCerrar').style.display = 'none';
+      document.getElementById('btnSiguiente').style.display = 'none';
+      document.getElementById('btnAtras').style.display = 'inline-block';
+      document.getElementById('btnFinalizar').style.display = 'flex';
+
+      verificarEquipo();
+      armarTablaResultados();
+    }
+
+    function irAtras() {
+      document.getElementById('segmento2').classList.remove('active');
+      document.getElementById('segmento1').classList.add('active');
+      document.getElementById('step2').classList.remove('active');
+      document.getElementById('step1').classList.add('active');
+
+      document.getElementById('btnCerrar').style.display = 'inline-block';
+      document.getElementById('btnSiguiente').style.display = 'flex';
+      document.getElementById('btnAtras').style.display = 'none';
+      document.getElementById('btnFinalizar').style.display = 'none';
+    }
+
+    function verificarEquipo() {
+      const eq = document.getElementById('eqPh').value;
+      document.getElementById('eqVerificacion').value = "Buscando...";
+      document.getElementById('eqVerificacion').style.color = "var(--gris)";
+
+      google.script.run
+        .withSuccessHandler(res => {
+          document.getElementById('eqVerificacion').value = res.estado;
+          document.getElementById('eqVerificacion').style.color = res.color;
+        })
+        .verificarEquipoCurva(eq);
+    }
+
+    function armarTablaResultados() {
+      const tbody = document.getElementById('tbodyResultados');
+      tbody.innerHTML = '';
+
+      niveles.forEach((n, idx) => {
+        let logTxt = n.log;
+        let concTxt = n.conc > 0 ? n.conc.toFixed(3) : "0.000";
+        
+        tbody.innerHTML += `
+          <tr>
+            <td><strong>${n.nombre}</strong></td>
+            <td>${concTxt}</td>
+            <td><span style="font-family:monospace; color:var(--gris);">${logTxt}</span></td>
+            <td><input type="number" class="td-input" style="font-weight:bold; font-size:12px;" value="${n.mv}" step="0.1" placeholder="Ej: -45.2" oninput="actualizarMv(${idx}, this.value)"></td>
+            <td><strong id="corr_${idx}" style="color:var(--azul-oscuro);">-</strong></td>
+          </tr>
+        `;
+      });
+      calcularRegresion();
+    }
+
+    function actualizarMv(idx, val) {
+      niveles[idx].mv = val;
+      calcularRegresion();
+    }
+
+    function calcularRegresion() {
+      let mvBlanco = parseFloat(niveles[0].mv);
+      if (isNaN(mvBlanco)) mvBlanco = 0; 
+
+      let xData = [];
+      let yData = []; 
+
+      niveles.forEach((n, idx) => {
+        let yCorrTexto = "-";
+        if (n.mv !== "") {
+          const valY = parseFloat(n.mv);
+          if (!isNaN(valY)) {
+            const corregido = valY - mvBlanco;
+            yCorrTexto = corregido.toFixed(1);
+            
+            if (n.log !== "N/A") {
+              const x = parseFloat(n.log);
+              if (!isNaN(x)) {
+                xData.push(x);
+                yData.push(corregido); 
+              }
+            }
+          }
+        }
+        
+        const tdCorr = document.getElementById(`corr_${idx}`);
+        if(tdCorr) tdCorr.innerText = yCorrTexto;
+      });
+
+      const nDatos = xData.length;
+      let a = 0, b = 0, r2 = 0;
+
+      if (nDatos >= 3) { 
+        let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0, sumYY = 0;
+        for (let i = 0; i < nDatos; i++) {
+          sumX += xData[i]; sumY += yData[i];
+          sumXY += xData[i] * yData[i];
+          sumXX += xData[i] * xData[i];
+          sumYY += yData[i] * yData[i];
+        }
+
+        const xMean = sumX / nDatos;
+        const yMean = sumY / nDatos;
+
+        const num = sumXY - (sumX * sumY / nDatos);
+        const denX = sumXX - (sumX * sumX / nDatos);
+        const denY = sumYY - (sumY * sumY / nDatos);
+
+        a = num / denX;
+        b = yMean - (a * xMean);
+        r2 = (num * num) / (denX * denY);
+
+        document.getElementById('res_a').innerText = a.toFixed(2);
+        document.getElementById('res_b').innerText = b.toFixed(2);
+        document.getElementById('res_r2').innerText = r2.toFixed(4); 
+        
+        let signoB = b >= 0 ? "+" : "-";
+        document.getElementById('ecuacion').innerText = `y = ${a.toFixed(2)}x ${signoB} ${Math.abs(b).toFixed(2)}`;
+
+        const badge = document.getElementById('badgeCurva');
+        if (r2 >= 0.990) {
+          badge.innerText = "CUMPLE";
+          badge.className = "badge badge-conforme"; 
+        } else {
+          badge.innerText = "NO CUMPLE";
+          badge.className = "badge badge-noconforme"; 
+        }
+
+        dibujarGrafica(xData, yData, a, b);
+
+      } else {
+        document.getElementById('res_a').innerText = "-";
+        document.getElementById('res_b').innerText = "-";
+        document.getElementById('res_r2').innerText = "-";
+        document.getElementById('ecuacion').innerText = "Faltan datos de mV";
+        const badge = document.getElementById('badgeCurva');
+        badge.innerText = "Pendiente"; badge.className = "badge";
+        
+        if (chartInstance) chartInstance.destroy();
+      }
+    }
+
+    function dibujarGrafica(xData, yData, a, b) {
+      if (chartInstance) chartInstance.destroy();
+
+      const xMin = Math.min(...xData);
+      const xMax = Math.max(...xData);
+      
+      const lineData = [
+        {x: xMin, y: (a * xMin + b)},
+        {x: xMax, y: (a * xMax + b)}
+      ];
+
+      const scatterData = xData.map((x, i) => ({ x: x, y: yData[i] }));
+
+      const ctx = document.getElementById('graficaCurva').getContext('2d');
+      chartInstance = new Chart(ctx, {
+        type: 'scatter',
+        data: {
+          datasets: [{
+            label: 'Lectura Corregida',
+            data: scatterData,
+            backgroundColor: '#0a4079',
+            pointRadius: 6,
+            order: 1
+          }, {
+            label: 'Tendencia',
+            data: lineData,
+            type: 'line',
+            borderColor: '#afcc46',
+            borderWidth: 2,
+            fill: false,
+            pointRadius: 0,
+            order: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { title: { display: true, text: 'Log(Concentración)' } },
+            y: { title: { display: true, text: 'Lectura Corregida [mV]' } }
+          }
+        }
+      });
+    }
+
+    function finalizarCurva() {
+      const r2Text = document.getElementById('res_r2').innerText;
+      if (r2Text === "-" || r2Text === "") {
+        mostrarToastError("Faltan datos de lecturas (mV) para poder guardar la curva.");
+        return;
+      }
+
+      const instIntVal = document.getElementById('inst_Int').value;
+      const balonInt = document.getElementById('balonInt').value;
+      if (!instIntVal || !balonInt) {
+        mostrarToastError("Asegúrese de haber seleccionado el instrumento y balón en el Segmento I.");
+        return;
+      }
+
+      const datos = {
+        balanza: document.getElementById('balanza').value,
+        loteYoduro: document.getElementById('loteYoduro').value,
+        pesoKi: document.getElementById('pesoKi').value,
+        balonStd: document.getElementById('balonStd').value,
+        concStd: document.getElementById('concStd').value,
+        balonInt: balonInt,
+        concInt: document.getElementById('concInt').value,
+      };
+
+      const tipoInt = document.querySelector('input[name="tipo_Int"]:checked').value;
+      datos.instIntFormat = instIntVal + (tipoInt === 'micro' ? ' (M)' : ' (PV)');
+
+      datos.nivelesNombres = [];
+      datos.nivelesInst = [];
+      datos.nivelesAlicuota = [];
+      datos.nivelesConc = [];
+      datos.nivelesLog = [];
+      datos.nivelesMv = [];
+
+      niveles.forEach((n, idx) => {
+        datos.nivelesNombres.push(n.nombre);
+        datos.nivelesAlicuota.push(idx === 0 ? "NA" : n.alicuota);
+        datos.nivelesConc.push(n.conc > 0 ? n.conc.toFixed(3) : "0.000");
+        datos.nivelesLog.push(n.log === "N/A" ? "NA" : n.log);
+        datos.nivelesMv.push(n.mv === "" ? "NA" : n.mv);
+        
+        if (idx === 0) {
+          datos.nivelesInst.push("NA"); 
+        } else {
+          const tipoN = document.querySelector(`input[name="tipo_${idx}"]:checked`).value;
+          const instN = document.getElementById(`inst_${idx}`).value;
+          datos.nivelesInst.push(instN + (tipoN === 'micro' ? ' (M)' : ' (PV)'));
+        }
+      });
+
+      datos.eqPh = document.getElementById('eqPh').value;
+      datos.eqVerificacion = document.getElementById('eqVerificacion').value;
+      datos.a = document.getElementById('res_a').innerText;
+      datos.b = document.getElementById('res_b').innerText;
+      datos.r2 = r2Text;
+      datos.conformidad = document.getElementById('badgeCurva').innerText;
+
+      // MOSTRAR PANTALLA DE CARGA CENTRAL
+      document.getElementById('overlay-submit').style.display = 'flex';
+      document.getElementById('submit-spinner').style.display = 'block';
+      document.getElementById('submit-icon-success').style.display = 'none';
+      document.getElementById('submit-title').innerText = 'Guardando curva...';
+      document.getElementById('submit-title').style.color = 'var(--azul-oscuro)';
+      document.getElementById('submit-text').innerText = 'Por favor, no cierre la ventana.';
+
+      google.script.run
+        .withSuccessHandler(res => {
+          // TRANSICIÓN AL MENSAJE DE ÉXITO
+          document.getElementById('submit-spinner').style.display = 'none';
+          document.getElementById('submit-icon-success').style.display = 'block';
+          
+          document.getElementById('submit-title').innerText = '¡Proceso Completado!';
+          document.getElementById('submit-title').style.color = 'var(--success)';
+          document.getElementById('submit-text').innerText = res + '\nCerrando ventana...';
+          
+          setTimeout(() => google.script.host.close(), 2500);
+        })
+        .withFailureHandler(err => {
+          // OCULTAR PANTALLA Y MOSTRAR TOAST DE ERROR
+          document.getElementById('overlay-submit').style.display = 'none';
+          mostrarToastError(err.message);
+        })
+        .guardarCurva(datos);
+    }
+  </script>
+</body>
+</html>

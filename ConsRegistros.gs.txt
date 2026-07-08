@@ -1,0 +1,173 @@
+// ====================================================================
+// ConsRegistros.gs (Módulo de solo lectura / Consulta)
+// ====================================================================
+
+function consultarRegistros() {
+  iniciarFormularioConsultas();
+  return "Módulo de Consultas iniciado...";
+}
+
+function iniciarFormularioConsultas() {
+  const html = HtmlService.createHtmlOutputFromFile('form_ConsRegistros')
+    .setWidth(1100)
+    .setHeight(750);
+  SpreadsheetApp.getUi().showModalDialog(html, ' ');
+}
+
+/**
+ * Obtiene la lista única de controles para el buscador inteligente
+ */
+function obtenerListaControles() {
+  try {
+    const ssYodo = SpreadsheetApp.openById(CONFIG.APP_YODO.ID);
+    const hojaRes = ssYodo.getSheetByName(CONFIG.APP_YODO.HOJAS.RESULTADOS);
+    
+    const lastRow = hojaRes.getLastRow();
+    if (lastRow < 7) return [];
+    
+    const data = hojaRes.getRange(7, 1, lastRow - 6, 5).getValues();
+    let mapControles = new Map();
+    
+    data.forEach(r => {
+      let ctrl = String(r[1]).trim();
+      let prod = String(r[4]).trim();
+      if (ctrl !== "") {
+        mapControles.set(ctrl, `${ctrl} - ${prod}`);
+      }
+    });
+
+    let lista = Array.from(mapControles, ([ctrl, texto]) => ({ control: ctrl, texto: texto }));
+    lista.sort((a, b) => a.control.localeCompare(b.control, undefined, {numeric: true, sensitivity: 'base'}));
+    
+    return lista;
+  } catch (e) {
+    throw new Error("Error obteniendo controles: " + e.message);
+  }
+}
+
+/**
+ * Extrae toda la trazabilidad de un control específico
+ */
+function obtenerTrazabilidadControl(controlBuscado) {
+  try {
+    const ssYodo = SpreadsheetApp.openById(CONFIG.APP_YODO.ID);
+    const ssPh = SpreadsheetApp.openById(CONFIG.EQUIPO_PH.ID);
+    
+    const hojaRep = ssYodo.getSheetByName(CONFIG.APP_YODO.HOJAS.REPORTE);
+    const hojaVerif = ssPh.getSheetByName(CONFIG.EQUIPO_PH.HOJAS.VERIFICACION);
+    const hojaRes = ssYodo.getSheetByName(CONFIG.APP_YODO.HOJAS.RESULTADOS);
+    const hojaCurva = ssYodo.getSheetByName(CONFIG.APP_YODO.HOJAS.CURVA);
+    const hojaDup = ssYodo.getSheetByName(CONFIG.APP_YODO.HOJAS.DUPLICADOS);
+
+    const dataVerif = hojaVerif.getRange(6, 1, Math.max(1, hojaVerif.getLastRow() - 5), 10).getValues();
+    const dataRes = hojaRes.getRange(7, 1, Math.max(1, hojaRes.getLastRow() - 6), 24).getValues();
+    const dataCurva = hojaCurva.getRange(7, 1, Math.max(1, hojaCurva.getLastRow() - 6), 24).getValues();
+    const dataDup = hojaDup.getRange(8, 1, Math.max(1, hojaDup.getLastRow() - 7), 15).getValues();
+    const dataRep = hojaRep.getRange(6, 1, Math.max(1, hojaRep.getLastRow() - 5), 16).getValues();
+
+    const extractDate = (val) => {
+      if (!val) return "";
+      if (val instanceof Date) return Utilities.formatDate(val, Session.getScriptTimeZone(), "yyyy-MM-dd");
+      return String(val).substring(0, 10);
+    };
+
+    let item = {
+      control: controlBuscado, producto: "", identificacion: "", analista: "",
+      bloques: [], 
+      aprobacion: null 
+    };
+
+    // 1. Extraer datos de Aprobación de la hoja "Reporte"
+    let repEncontrado = dataRep.find(r => String(r[0]).trim() === controlBuscado);
+    if (repEncontrado) {
+      item.analista = String(repEncontrado[12]).trim() || "No registrado"; // Extraemos Col M (Responsable de reporte)
+      item.aprobacion = {
+        especificacion: repEncontrado[8],
+        conformidad: repEncontrado[9],
+        ac: repEncontrado[10],
+        observaciones: String(repEncontrado[11]).trim() || "Sin observaciones", 
+        fechaRev: extractDate(repEncontrado[13]), 
+        responsableRev: String(repEncontrado[14]).trim() || "Pendiente", 
+        uuid: String(repEncontrado[15]).trim() || "Pendiente" 
+      };
+    }
+
+    // 2. Extraer Resultados y armar Bloques
+    let bloquesMap = {};
+    const resultadosCtrl = dataRes.filter(res => String(res[1]).trim() === controlBuscado);
+
+    if (resultadosCtrl.length === 0) throw new Error("No se encontraron resultados para este control.");
+
+    item.producto = String(resultadosCtrl[0][4]).trim();
+    item.identificacion = String(resultadosCtrl[0][5]).trim();
+
+    resultadosCtrl.forEach(res => {
+      let fAnaStr = extractDate(res[0]);
+      let nombreCurva = String(res[14]).trim();
+      let tipo = String(res[3]).trim();
+      let blockKey = fAnaStr + "_" + nombreCurva;
+
+      if (!bloquesMap[blockKey]) {
+        let verifEncontrada = null;
+        dataVerif.forEach(v => {
+          let fvStr = extractDate(v[0]);
+          if (fvStr === fAnaStr && String(v[6]).toUpperCase().includes("CONFORME")) {
+            let fHoraTexto = (v[0] instanceof Date) ? Utilities.formatDate(v[0], Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm") : String(v[0]);
+            verifEncontrada = { fHora: fHoraTexto, loteYod: v[1], loteIsa: v[2], resp1: v[3], resp10: v[4], diff: v[5], conf: v[6], resp: v[7] };
+          }
+        });
+
+        let curvaEncontrada = null;
+        dataCurva.forEach(c => {
+          let fcStr = extractDate(c[0]);
+          if (fcStr === fAnaStr) {
+            let chStr = (c[0] instanceof Date) ? Utilities.formatDate(c[0], Session.getScriptTimeZone(), "HH:mm") : String(c[0]).substring(13,18);
+            let n = `Curva ${chStr} (R²: ${c[19]})`;
+            if (n === nombreCurva) {
+              const limpiar = (str) => String(str).replace(/\.$/, '').split(';\n');
+              let cHoraTexto = (c[0] instanceof Date) ? Utilities.formatDate(c[0], Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm") : String(c[0]);
+              curvaEncontrada = {
+                fHora: cHoraTexto, balanza: c[1], loteYod: c[2], pesoKi: c[3], balonStd: c[4], concStd: c[5],
+                instInt: c[6], balonInt: c[7], concInt: c[8], eqPh: c[14], eqVerif: c[15],
+                a: c[17], b: c[18], r2: c[19], conf: c[20], resp: c[21],
+                niveles: limpiar(c[9]), insts: limpiar(c[10]), alis: limpiar(c[11]), conc: limpiar(c[12]), log: limpiar(c[13]), mv: limpiar(c[16])
+              };
+            }
+          }
+        });
+
+        bloquesMap[blockKey] = { fecha: fAnaStr, nombreCurva: nombreCurva, equipoVerif: verifEncontrada, curvaData: curvaEncontrada, ensayos: {} };
+      }
+
+      if (!bloquesMap[blockKey].ensayos[tipo]) {
+        let dupData = null;
+        let infVal = String(res[17]).trim(); 
+        let supVal = String(res[18]).trim(); 
+
+        const dupEncontrado = dataDup.find(dup => String(dup[1]).trim() === controlBuscado && String(dup[2]).trim() === tipo);
+        if (dupEncontrado) {
+          let prom = dupEncontrado[10]; let confProm = "No aplica";
+          if (infVal.toUpperCase() !== "NO APLICA" && infVal !== "NA" && infVal !== "") {
+            let pVal = parseFloat(String(prom).replace(',', '.')); let iVal = parseFloat(infVal.replace(',', '.')); let sVal = parseFloat(supVal.replace(',', '.'));
+            if (!isNaN(pVal) && !isNaN(iVal) && !isNaN(sVal)) confProm = (pVal >= iVal && pVal <= sVal) ? "Cumple" : "No cumple";
+          }
+          dupData = { prom: prom, rsdr: dupEncontrado[11], prsdr: dupEncontrado[12], horrat: dupEncontrado[13], confProm: confProm };
+        }
+        bloquesMap[blockKey].ensayos[tipo] = { tipo: tipo, inf: infVal, sup: supVal, duplicadoData: dupData, replicas: [] };
+      }
+
+      bloquesMap[blockKey].ensayos[tipo].replicas.push({
+        rep: res[2], balanza: res[6], peso: res[7], balonM: res[8], pipeta: res[9], balonD: res[10], loteIsa: res[13], mv: res[15], mgkg: res[16]
+      });
+    });
+
+    item.bloques = Object.values(bloquesMap).sort((a, b) => {
+      let aHasR = a.ensayos['Rutina'] ? 1 : 0; let bHasR = b.ensayos['Rutina'] ? 1 : 0;
+      if (aHasR !== bHasR) return bHasR - aHasR; return a.fecha.localeCompare(b.fecha); 
+    });
+
+    return item;
+  } catch (e) {
+    throw new Error("Error extrayendo trazabilidad: " + e.message);
+  }
+}

@@ -1,0 +1,315 @@
+// ==========================================
+// CONFIGURACIÓN GLOBAL (VARIABLES DE ENTORNO)
+// General.gs
+// ==========================================
+
+const CONFIG = {
+  WEB_APP_URL: 'https://script.google.com/a/macros/mxns.com/s/AKfycbx-noh-_1mQQ6033rMYVzpC0zmI_XoQ_XcCAsLGehWfmT-10P-xDYdKkT_66t-DRJc9VA/exec',
+  ADMIN_EMAIL: "sop.qualityfoood.co@mxns.com",
+  SESION_DURACION: 21600,
+  
+  APP_YODO: {
+    ID: '1lXAoNTqxwF-U4u3cDVXaUANY-Gn_Q8fgDfEZRZSf1W4',
+    HOJAS: {
+      INICIO: 'INICIO',
+      INSTRUCTIVO: 'INSTRUCTIVO',
+      CURVA: 'Curva de Calibración',
+      RESULTADOS: 'Resultados',
+      REPORTE: 'Reporte analítico',
+      MATRIZ: 'Matriz',
+      DUPLICADOS: 'Control de Duplicados'
+    }
+  },
+  EQUIPO_PH: {
+    ID: '1mktmTtDukGczhwOU-E7LNQvt-ZktIvGIEV64RyYuRkk',
+    HOJAS: {
+      SEGUIMIENTO: 'Seguimiento',
+      VERIFICACION: 'Verificación',
+      USO: 'Registro de Uso'
+    }
+  },
+  SOLUCIONES: {
+    ID: '1KYd5kl1EbUaC_Xsx2wEQuG_Zj23gZcNTG5UBOVxXw9k',
+    HOJAS: {
+      TRAZABILIDAD: 'Trazabilidad'
+    }
+  },
+  MICROPIPETAS: {
+    ID: '1QOmYJCCQ2q0ZK9oxGV69y4ytX64sm_Cj4RxOHvksOtk',
+    HOJAS: {
+      MATRIZ: 'Matriz'
+    }
+  },
+  INVENTARIO: {
+    ID: '1zG2cB0oTpq-HqwsNCeqpbxn3yL5MA8ZFW0pb6SsKNqY',
+    HOJAS: {
+      MATERIAL: 'Material_Volumétrico'
+    }
+  },
+  MUESTRAS_BR: {
+    ID: '1h997HMZdUe0loh3ZDDLMs4nhbi8G9wySdcHNn14EO2E',
+    HOJAS: {
+      MATRIZ: 'MuestrasBR'
+    }
+  },
+  CREDENCIALES: { 
+    ID: '1sqi3qPfapPux2UvqkoDxG9T0lI8A3s0UE6UAuLIj5q4', 
+    HOJAS: { 
+      USERS: 'Users'
+    } 
+  }
+};
+
+// ==========================================
+// MENÚ Y APERTURA DE SESIÓN
+// ==========================================
+function onOpen() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ui = SpreadsheetApp.getUi();
+  
+  let user = "";
+  try { user = Session.getActiveUser().getEmail(); } catch(e) {}
+
+  const hojaInicio = ss.getSheetByName(CONFIG.APP_YODO.HOJAS.INICIO);
+  if (hojaInicio) hojaInicio.activate();
+
+  if (user.toLowerCase() !== CONFIG.ADMIN_EMAIL.toLowerCase()) {
+    const hojaMatriz = ss.getSheetByName(CONFIG.APP_YODO.HOJAS.MATRIZ);
+    if (hojaMatriz && !hojaMatriz.isSheetHidden()) hojaMatriz.hideSheet();
+  }
+
+  // Menú restringido inicial
+  ui.createMenu('🧪 Registro de Resultados')
+    .addItem('⚠️ Requiere Autenticación', 'entrarAlSistema')
+    .addToUi();
+}
+
+function entrarAlSistema() {
+  // 🛡️ FORZADO DE PERMISOS: Drive y UrlFetchApp
+  try {
+    DriveApp.getRootFolder();
+    UrlFetchApp.fetch("https://google.com", {muteHttpExceptions: true});
+    SpreadsheetApp.openById(CONFIG.CREDENCIALES.ID); 
+  } catch (e) {
+    Logger.log("Petición de permisos forzada.");
+  }
+
+  const html = HtmlService.createTemplateFromFile('form_LoginGral').evaluate().setWidth(380).setHeight(480);
+  SpreadsheetApp.getUi().showModalDialog(html, ' ');
+}
+
+function iniciarSesionSGC(passDigitada) {
+  try {
+    validarCredencialesExterna(passDigitada);
+    CacheService.getUserCache().put('sesion_activa', 'true', CONFIG.SESION_DURACION);
+    construirMenuOperativo();
+    return "Credenciales verificadas. Acceso concedido.";
+  } catch (error) {
+    throw new Error(error.message);
+  }
+}
+
+function construirMenuOperativo() {
+  const ui = SpreadsheetApp.getUi();
+  ui.createMenu('🧪 Registro de Resultados')
+    .addItem('Abrir Panel Operativo', 'redirigirYAbrirPanel')
+    .addSeparator()
+    .addItem('Cerrar Sesión', 'onOpen')
+    .addToUi();
+}
+
+function redirigirYAbrirPanel() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const hojaRes = ss.getSheetByName(CONFIG.APP_YODO.HOJAS.RESULTADOS);
+  if (hojaRes) hojaRes.activate(); 
+  
+  const html = HtmlService.createHtmlOutputFromFile('PanelLateral').setTitle('Registro y Reporte de Yodo').setWidth(300);
+  SpreadsheetApp.getUi().showSidebar(html);
+  return true; 
+}
+
+function verificarSesion() {
+  const sesion = CacheService.getUserCache().get('sesion_activa');
+  if (!sesion) throw new Error("SESION_EXPIRADA");
+  // Refrescamos la galleta de sesión
+  CacheService.getUserCache().put('sesion_activa', 'true', CONFIG.SESION_DURACION);
+  return true;
+}
+
+function obtenerUsuarioActual() {
+  return Session.getActiveUser().getEmail();
+}
+
+// ==========================================
+// AUTENTICACIÓN Y ENCRIPTACIÓN
+// ==========================================
+function encriptarSHA256(texto) {
+  const rawHash = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, texto, Utilities.Charset.UTF_8);
+  let txtHash = '';
+  for (let i = 0; i < rawHash.length; i++) {
+    let hashVal = rawHash[i];
+    if (hashVal < 0) hashVal += 256;
+    if (hashVal.toString(16).length == 1) txtHash += '0';
+    txtHash += hashVal.toString(16);
+  }
+  return txtHash;
+}
+
+function validarCredencialesExterna(passDigitada) {
+  const emailActivo = Session.getActiveUser().getEmail();
+  try {
+    const ssControl = SpreadsheetApp.openById(CONFIG.CREDENCIALES.ID);
+    const hojaAuth = ssControl.getSheetByName(CONFIG.CREDENCIALES.HOJAS.USERS);
+    if (!hojaAuth) throw new Error("No se encontró la pestaña 'Users' en Credenciales.");
+    
+    const lastRow = hojaAuth.getLastRow();
+    if (lastRow < 6) throw new Error("La tabla de usuarios está vacía.");
+
+    const data = hojaAuth.getRange(6, 1, lastRow - 5, 7).getValues();
+    const hashDigitado = encriptarSHA256(passDigitada);
+    let usuarioEncontrado = false;
+
+    for (let i = 0; i < data.length; i++) {
+      if (String(data[i][5]).trim().toLowerCase() === emailActivo.toLowerCase()) {
+        usuarioEncontrado = true;
+        const hashGuardado = String(data[i][6]).toLowerCase(); 
+        if (hashGuardado === hashDigitado.toLowerCase() || hashGuardado === passDigitada.toLowerCase()) return true; 
+        throw new Error("La contraseña ingresada es incorrecta.");
+      }
+    }
+    if (!usuarioEncontrado) throw new Error("El usuario " + emailActivo + " no está autorizado en el SGC.");
+  } catch (e) {
+    throw new Error(e.message);
+  }
+}
+
+// ==========================================
+// MOTOR DE CORREOS DINÁMICOS
+// ==========================================
+function obtenerDestinatariosLideres() {
+  try {
+    const ssCred = SpreadsheetApp.openById(CONFIG.CREDENCIALES.ID);
+    const hojaUsers = ssCred.getSheetByName(CONFIG.CREDENCIALES.HOJAS.USERS);
+    const lastRow = hojaUsers.getLastRow();
+    
+    // Fallback de emergencia extremo si la tabla está vacía
+    if (lastRow < 6) return "sop.qualityfoood.co@mxns.com"; 
+
+    // Extraemos desde la fila 6 (A hasta F) -> F es el índice 5
+    const data = hojaUsers.getRange(6, 1, lastRow - 5, 6).getValues();
+    
+    let principales = [];
+    let fallback = [];
+
+    data.forEach(row => {
+      let area = String(row[2]).trim();   // Columna C (Índice 2)
+      let rol = String(row[4]).trim();    // Columna E (Índice 4)
+      let correo = String(row[5]).trim(); // Columna F (Índice 5)
+
+      // Búsqueda exacta respetando mayúsculas y tildes estandarizadas
+      if (rol === "Administrador" && correo !== "") {
+        if (area === "Química Húmeda") {
+          principales.push(correo);
+        } else if (area === "Operaciones" || area === "Bromatología") {
+          fallback.push(correo);
+        }
+      }
+    });
+
+    if (principales.length > 0) return principales.join(",");
+    if (fallback.length > 0) return fallback.join(",");
+    
+    // Fallback extremo por defecto si no hay nadie configurado en esas áreas
+    return "sop.qualityfoood.co@mxns.com"; 
+  } catch (e) {
+    // Fallback extremo en caso de que ocurra un error de conexión al libro de credenciales
+    return "sop.qualityfoood.co@mxns.com";
+  }
+}
+
+// ==========================================
+// FUNCIONES DEL PANEL LATERAL (EN CONSTRUCCIÓN)
+// ==========================================
+function consultarEquipos() { return "Módulo: Consultar equipos en construcción"; }
+function administrarEquipos() { return "Módulo: Administrar equipos en construcción"; }
+
+// ====================================================================
+// 🌐 WEB APP: ENRUTAMIENTO CENTRALIZADO (doGet y doPost)
+// ====================================================================
+
+/**
+ * Controla qué interfaz mostrar según el enlace que se abra.
+ */
+function doGet(e) {
+  try {
+    DriveApp.getRootFolder();
+    ScriptApp.getOAuthToken();
+  } catch(e) {
+    Logger.log("Petición de permisos forzada en WebApp.");
+  }
+
+  if (e && e.parameter) {
+    if (e.parameter.modulo === 'informes') {
+      return HtmlService.createTemplateFromFile('WebApp_Aprobacion')
+        .evaluate().setTitle('SGC - Revisión de Informes Analíticos')
+        .addMetaTag('viewport', 'width=device-width, initial-scale=1')
+        .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    }
+    
+    if (e.parameter.equipo) {
+      const template = HtmlService.createTemplateFromFile('form_RevisarRegistros');
+      template.equipoTarget = e.parameter.equipo;
+      return template.evaluate().setTitle('SGC - Revisión de Registros de Yodo')
+        .addMetaTag('viewport', 'width=device-width, initial-scale=1')
+        .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    }
+  }
+  
+  return HtmlService.createHtmlOutputFromFile('PanelLateral')
+    .setTitle('Registro y Reporte de Yodo')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+/**
+ * Atrapa las peticiones POST (escritura en hojas) y las procesa como Superadministrador.
+ */
+function doPost(e) {
+  try {
+    const parametros = JSON.parse(e.postData.contents);
+    const accion = parametros.accion;
+    let resultado = null;
+
+    // 🚀 SOLO ACCIONES QUE MODIFICAN HOJAS PROTEGIDAS VAN AQUÍ
+    switch(accion) {
+      case "guardarVerificacion": 
+        resultado = ejecutarLogicaGuardarVerificacion(parametros.datos, parametros.usuario); 
+        break;
+      case "registrarSeguimiento": 
+        resultado = ejecutarLogicaRegistrarSeguimiento(parametros.datos, parametros.usuario); 
+        break;
+      case "guardarCurva": 
+        resultado = ejecutarLogicaGuardarCurva(parametros.datos, parametros.usuario); 
+        break;
+      case "guardarReporteMuestras": 
+        resultado = ejecutarLogicaGuardarReporteMuestras(parametros.datos, parametros.usuario); 
+        break;
+      case "firmarRegistros": 
+        resultado = ejecutarLogicaFirmarRegistros(parametros.datos, parametros.usuario); 
+        break;
+      case "enviarSolicitudRevision": 
+        resultado = ejecutarLogicaEnviarSolicitudRevision(parametros.datos, parametros.usuario); 
+        break;
+      case "logicaGestionarEquipo": 
+        resultado = ejecutarLogicaGestionarEquipo(parametros.datos, parametros.usuario);
+        break;
+      default: 
+        throw new Error("Acción no reconocida por el servidor.");
+    }
+    
+    return ContentService.createTextOutput(JSON.stringify({ exito: true, datos: resultado }))
+                         .setMimeType(ContentService.MimeType.JSON);
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({ exito: false, error: error.message }))
+                         .setMimeType(ContentService.MimeType.JSON);
+  }
+}

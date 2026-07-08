@@ -1,0 +1,146 @@
+<!-- form_LoginGral.html -->
+
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    :root { --azul-oscuro: #0a4079; --lima: #afcc46; --cian: #00abe6; --gris: #6b7280; --fondo: #f4f7f9; --error: #ef4444; --success: #10b981; }
+    body { font-family: 'Segoe UI', sans-serif; padding: 0; margin: 0; background: var(--fondo); display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; position: relative;}
+    
+    .login-card { background: white; width: 100%; max-width: 320px; padding: 30px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); border-top: 5px solid var(--azul-oscuro); text-align: center; position: relative;}
+    .login-card h3 { margin: 0 0 5px 0; color: var(--azul-oscuro); font-size: 16px; text-transform: uppercase; }
+    .login-card p { font-size: 11px; color: var(--gris); margin-bottom: 25px; }
+
+    .email-display { background: #f1f5f9; padding: 12px; border-radius: 6px; font-weight: 700; font-size: 12px; margin-bottom: 20px; border: 1px dashed var(--cian); color: var(--azul-oscuro); word-break: break-all;}
+
+    label.field-lbl { display: block; font-size: 10px; font-weight: 700; color: var(--gris); text-transform: uppercase; margin-bottom: 5px; text-align: left;}
+    input[type="password"], input[type="text"] { width: 100%; padding: 10px; border: 1px solid #ced4da; border-radius: 6px; outline: none; box-sizing: border-box; font-size: 13px; transition: border-color 0.3s; }
+    input:focus { border-color: var(--cian); box-shadow: 0 0 0 3px rgba(0,171,230,0.1); }
+    
+    .show-pass { margin-top: 10px; display: flex; align-items: center; gap: 8px; font-size: 11px; cursor: pointer; color: var(--gris); justify-content: flex-start; }
+    
+    button { width: 100%; padding: 12px; background: var(--azul-oscuro); color: white; border: none; border-radius: 6px; font-weight: bold; font-size: 12px; cursor: pointer; margin-top: 25px; transition: 0.3s; text-transform: uppercase;}
+    button:hover:not(:disabled) { background: #0d4d8d; transform: translateY(-1px); }
+    button:disabled { background: #cbd5e1; cursor: not-allowed; }
+
+    #msgAuth { margin-top: 15px; font-size: 11px; font-weight: 600; display: none; padding: 10px; border-radius: 6px; }
+
+    /* ====== EFECTO WIZARD DE CARGA Y ÉXITO ====== */
+    #overlay-submit {
+      display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(4px); z-index: 10000;
+      flex-direction: column; justify-content: center; align-items: center; text-align: center;
+      animation: fadeInOverlay 0.3s ease-in-out;
+    }
+    @keyframes fadeInOverlay { from { opacity: 0; } to { opacity: 1; } }
+    .submit-spinner { width: 55px; height: 55px; border-radius: 50%; border: 5px solid #e1e5eb; border-top-color: var(--azul-oscuro); border-bottom-color: var(--lima); animation: spin 1s linear infinite; margin-bottom: 20px; }
+    .submit-icon-success { display: none; font-size: 65px; margin-bottom: 10px; animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+    @keyframes popIn { 0% { transform: scale(0.3); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    .submit-title { font-size: 18px; font-weight: 800; color: var(--azul-oscuro); margin: 0 0 8px 0; transition: color 0.3s;}
+    .submit-text { font-size: 13px; color: var(--gris); margin: 0; font-weight: 500;}
+  </style>
+</head>
+<body>
+
+  <!-- PANTALLA DIFUMINADA DE VALIDACIÓN -->
+  <div id="overlay-submit">
+    <div class="submit-spinner" id="submit-spinner"></div>
+    <div class="submit-icon-success" id="submit-icon-success">✅</div>
+    <h3 class="submit-title" id="submit-title">Verificando credenciales...</h3>
+    <p class="submit-text" id="submit-text">Validando accesos al sistema.</p>
+  </div>
+
+  <div class="login-card">
+    <div style="font-size: 40px; margin-bottom: 10px;">🧪</div>
+    <h3>Registro y Reporte</h3>
+    <p>Inicie sesión para acceder al panel operativo de Yodo.</p>
+    
+    <div class="email-display" id="userEmail">Obteniendo permisos...</div>
+    
+    <div style="text-align: left;">
+      <label class="field-lbl">Contraseña de Seguridad</label>
+      <input type="password" id="passInput" placeholder="Ingrese su clave">
+      <label class="show-pass">
+        <input type="checkbox" onchange="document.getElementById('passInput').type = this.checked ? 'text' : 'password'"> Mostrar
+      </label>
+    </div>
+    
+    <button id="btnAutorizar" onclick="validarYEntrar()">INGRESAR AL SISTEMA</button>
+    <div id="msgAuth"></div>
+  </div>
+
+  <script>
+    window.onload = () => {
+      // 1. Cargar el correo del usuario
+      google.script.run
+        .withSuccessHandler(e => document.getElementById('userEmail').innerText = e)
+        .obtenerUsuarioActual();
+
+      // 2. Habilitar la tecla "Enter" para el campo de contraseña
+      document.getElementById('passInput').addEventListener('keyup', function(event) {
+        if (event.key === 'Enter') {
+          validarYEntrar();
+        }
+      });
+      
+      // Auto-focus en la contraseña
+      document.getElementById('passInput').focus();
+    };
+
+    function validarYEntrar() {
+      const pass = document.getElementById('passInput').value;
+      const btn = document.getElementById('btnAutorizar');
+      const msg = document.getElementById('msgAuth');
+
+      if (!pass) { 
+        msg.innerText = "⚠️ Ingrese su contraseña"; 
+        msg.style.color = "#ef4444"; 
+        msg.style.background = "#fee2e2"; 
+        msg.style.display = "block"; 
+        return; 
+      }
+
+      btn.disabled = true; 
+      btn.innerText = "VERIFICANDO..."; 
+      msg.style.display = "none";
+
+      // ENCENDER WIZARD DE CARGA
+      document.getElementById('overlay-submit').style.display = 'flex';
+      document.getElementById('submit-spinner').style.display = 'block';
+      document.getElementById('submit-icon-success').style.display = 'none';
+      document.getElementById('submit-title').innerText = 'Verificando credenciales...';
+      document.getElementById('submit-title').style.color = 'var(--azul-oscuro)';
+      document.getElementById('submit-text').innerText = 'Validando accesos en base de datos.';
+
+      google.script.run
+        .withSuccessHandler((res) => {
+          // TRANSICIÓN AL ÉXITO
+          document.getElementById('submit-spinner').style.display = 'none';
+          document.getElementById('submit-icon-success').style.display = 'block';
+          document.getElementById('submit-title').innerText = '¡Acceso Concedido!';
+          document.getElementById('submit-title').style.color = 'var(--success)';
+          document.getElementById('submit-text').innerText = 'Abriendo panel operativo...';
+          
+          setTimeout(() => {
+            google.script.run
+              .withSuccessHandler(() => { google.script.host.close(); })
+              .redirigirYAbrirPanel();
+          }, 1500);
+        })
+        .withFailureHandler((err) => {
+          // APAGAR WIZARD Y MOSTRAR ALERTA ROJA EN LA TARJETA
+          document.getElementById('overlay-submit').style.display = 'none';
+          btn.disabled = false; 
+          btn.innerText = "INGRESAR AL SISTEMA";
+          msg.innerText = "❌ " + err.message; 
+          msg.style.color = "#ef4444"; 
+          msg.style.background = "#fee2e2"; 
+          msg.style.display = "block";
+        })
+        .iniciarSesionSGC(pass);
+    }
+  </script>
+</body>
+</html>

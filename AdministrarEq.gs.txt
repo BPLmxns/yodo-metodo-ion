@@ -1,0 +1,176 @@
+// ====================================================================
+// AdministrarEq.gs
+// ====================================================================
+
+// --- 🔍 CONSULTAS LOCALES Y SEGURIDAD ---
+
+function administrarEquipos() {
+  try {
+    const autorizado = verificarPermisoAdminEquipos();
+    if (!autorizado) {
+      SpreadsheetApp.getUi().alert("Acceso denegado: Solo los Administradores autorizados de áreas específicas pueden gestionar el inventario.");
+      return;
+    }
+    
+    const html = HtmlService.createHtmlOutputFromFile('form_AdministrarEq')
+      .setWidth(750)
+      .setHeight(850);
+    SpreadsheetApp.getUi().showModalDialog(html, ' ');
+  } catch (e) {
+    SpreadsheetApp.getUi().alert("Error de seguridad: " + e.message);
+  }
+}
+
+function verificarPermisoAdminEquipos() {
+  const emailActivo = Session.getActiveUser().getEmail().toLowerCase().trim();
+  
+  // Excepción del super administrador del sistema
+  if (emailActivo === "sop.qualityfoood.co@mxns.com") return true;
+
+  const ssCred = SpreadsheetApp.openById(CONFIG.CREDENCIALES.ID);
+  const hojaUsers = ssCred.getSheetByName(CONFIG.CREDENCIALES.HOJAS.USERS);
+  const lastRow = hojaUsers.getLastRow();
+  
+  if (lastRow < 6) return false;
+
+  const data = hojaUsers.getRange(6, 1, lastRow - 5, 6).getValues();
+  const areasPermitidas = [
+    "química húmeda", "quimica humeda", "bromatología", "bromatologia", 
+    "materias primas", "biodegradabilidad", "aguas", "operaciones"
+  ];
+
+  for (let i = 0; i < data.length; i++) {
+    let uEmail = String(data[i][5]).trim().toLowerCase();
+    let uRol = String(data[i][4]).trim().toLowerCase();
+    let uArea = String(data[i][2]).trim().toLowerCase();
+
+    if (uEmail === emailActivo && uRol === "administrador") {
+      if (areasPermitidas.includes(uArea)) return true;
+    }
+  }
+  return false;
+}
+
+function obtenerDatosAdministracion() {
+  try {
+    const ssYodo = SpreadsheetApp.openById(CONFIG.APP_YODO.ID);
+    const hojaMatriz = ssYodo.getSheetByName(CONFIG.APP_YODO.HOJAS.MATRIZ);
+    if (!hojaMatriz) throw new Error("No se encontró la hoja 'Matriz'.");
+
+    const ultimaFila = hojaMatriz.getLastRow();
+    if (ultimaFila < 2) return { equipos: [], areas: [] };
+
+    const datosMatriz = hojaMatriz.getRange(2, 1, ultimaFila - 1, 2).getDisplayValues();
+    
+    let equipos = [];
+    let areasSet = new Set();
+
+    datosMatriz.forEach(fila => {
+      const codigo = String(fila[0]).trim();
+      const area = String(fila[1]).trim();
+      
+      if (codigo !== "") {
+        equipos.push({ codigo: codigo, area: area });
+        if (area !== "") areasSet.add(area);
+      }
+    });
+
+    equipos.sort((a, b) => a.codigo.localeCompare(b.codigo, undefined, {numeric: true, sensitivity: 'base'}));
+    const areasUnicas = Array.from(areasSet).sort();
+
+    return { equipos: equipos, areas: areasUnicas };
+  } catch (e) {
+    throw new Error("Error obteniendo datos: " + e.message);
+  }
+}
+
+// --- 🚀 PUENTE PARA ESCRITURA (BLINDADO) ---
+
+function gestionarEquipo(datos) {
+  const usuario = Session.getActiveUser().getEmail();
+  const payload = { accion: "logicaGestionarEquipo", datos: datos, usuario: usuario };
+  
+  let opcionesPost = {
+    method: "post",
+    contentType: "application/json",
+    headers: { "Authorization": "Bearer " + ScriptApp.getOAuthToken() },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true,
+    followRedirects: false // 🛡️ Evitamos redirección automática
+  };
+  
+  let resp = UrlFetchApp.fetch(CONFIG.WEB_APP_URL, opcionesPost);
+  
+  // 🛡️ Atrapamos la redirección (HTTP 302) y entramos por GET
+  if (resp.getResponseCode() === 302 || resp.getResponseCode() === 303 || resp.getResponseCode() === 307) {
+    const nuevaUrl = resp.getHeaders()['Location'];
+    
+    let opcionesGet = {
+      method: "get",
+      headers: { "Authorization": "Bearer " + ScriptApp.getOAuthToken() },
+      muteHttpExceptions: true
+    };
+    resp = UrlFetchApp.fetch(nuevaUrl, opcionesGet);
+  }
+  
+  const textoRespuesta = resp.getContentText();
+  
+  if (textoRespuesta.trim().toLowerCase().startsWith("<!doctype")) {
+    throw new Error("Error del servidor de Google al retornar los datos. La operación posiblemente se ejecutó.");
+  }
+  
+  const resultado = JSON.parse(textoRespuesta);
+  if (!resultado.exito) throw new Error(resultado.error);
+  
+  return resultado.datos;
+}
+
+// --- 🔐 LÓGICA REAL DE ESCRITURA (En la Web App) ---
+
+function ejecutarLogicaGestionarEquipo(datos, usuario) {
+  try {
+    const ssYodo = SpreadsheetApp.openById(CONFIG.APP_YODO.ID);
+    const hojaMatriz = ssYodo.getSheetByName(CONFIG.APP_YODO.HOJAS.MATRIZ);
+    if (!hojaMatriz) throw new Error("Hoja Matriz no encontrada.");
+
+    const accion = datos.accion;
+    const codigo = datos.codigo;
+    const area = datos.area;
+
+    const lastRow = hojaMatriz.getLastRow();
+    const dataMatriz = lastRow > 1 ? hojaMatriz.getRange(2, 1, lastRow - 1, 1).getValues() : [];
+    
+    let filaEncontrada = -1;
+    for (let i = 0; i < dataMatriz.length; i++) {
+      if (String(dataMatriz[i][0]).trim().toUpperCase() === codigo.toUpperCase()) {
+        filaEncontrada = i + 2;
+        break;
+      }
+    }
+
+    if (accion === 'agregar') {
+      if (filaEncontrada !== -1) throw new Error(`El equipo ${codigo} ya se encuentra registrado.`);
+      
+      hojaMatriz.appendRow([codigo, area]);
+      hojaMatriz.getRange(2, 1, hojaMatriz.getLastRow() - 1, 2).sort(2); // Ordenar Col B (Área)
+      return `El equipo ${codigo} fue añadido exitosamente.`;
+      
+    } else if (accion === 'modificar') {
+      if (filaEncontrada === -1) throw new Error("El equipo no existe.");
+      
+      hojaMatriz.getRange(filaEncontrada, 2).setValue(area);
+      hojaMatriz.getRange(2, 1, hojaMatriz.getLastRow() - 1, 2).sort(2); // Ordenar Col B (Área)
+      return `El equipo ${codigo} fue actualizado exitosamente.`;
+      
+    } else if (accion === 'eliminar') {
+      if (filaEncontrada === -1) throw new Error("El equipo no existe.");
+      
+      hojaMatriz.deleteRow(filaEncontrada);
+      return `El equipo ${codigo} fue eliminado del inventario.`;
+    }
+
+    throw new Error("Acción desconocida.");
+  } catch (error) {
+    throw new Error(error.message);
+  }
+}

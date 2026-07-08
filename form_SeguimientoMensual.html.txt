@@ -1,0 +1,457 @@
+<!-- form_SeguimientoMensual.html -->
+
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    :root {
+      --lima: #afcc46;
+      --cian: #00abe6;
+      --azul-oscuro: #0a4079;
+      --gris: #6b7280;
+      --fondo: #f4f7f9;
+      --error: #ef4444;
+      --success: #10b981;
+    }
+
+    body { font-family: 'Segoe UI', sans-serif; background: var(--fondo); margin: 0; padding: 0; color: #333; }
+    
+    .modal-header { background: var(--azul-oscuro); color: white; padding: 15px; text-align: center; border-bottom: 4px solid var(--lima); position: sticky; top: 0; z-index: 10; }
+    .modal-header h2 { margin: 0; font-size: 16px; text-transform: uppercase; letter-spacing: 1px; }
+
+    .content { padding: 15px; padding-bottom: 80px; }
+
+    .card { background: white; border-radius: 8px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #e1e5eb; }
+    
+    .card-title { font-size: 10px; font-weight: 800; color: var(--gris); text-transform: uppercase; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+    .card-title::before { content: ""; width: 3px; height: 10px; background: var(--cian); border-radius: 5px; }
+
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .field { margin-bottom: 10px; }
+    
+    label { display: block; font-size: 11px; font-weight: 700; color: var(--azul-oscuro); margin-bottom: 4px; }
+
+    input[type="text"], input[type="date"], textarea, select {
+      width: 100%; padding: 8px 10px; border: 1px solid #ced4da; border-radius: 5px; font-size: 13px; box-sizing: border-box; transition: all 0.2s;
+    }
+    input:focus, textarea:focus { border-color: var(--cian); outline: none; background: #fff; box-shadow: 0 0 0 3px rgba(0,171,230,0.1); }
+    
+    .read-only { background-color: #f1f5f9 !important; color: #475569; font-weight: 600; cursor: not-allowed; }
+    .invalid { border: 1.5px solid var(--error) !important; background-color: #fff5f5 !important; }
+
+    /* ====== CUSTOM DROPDOWN (Combo-Box) ====== */
+    .dropdown-container { position: relative; width: 100%; }
+    .dropdown-container input { padding-right: 30px; cursor: text; }
+    .dropdown-chevron { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 10px; color: var(--azul-oscuro); pointer-events: none; }
+    .dropdown-list {
+      display: none; position: absolute; top: 100%; left: 0; right: 0; background: white;
+      border: 1px solid var(--cian); border-radius: 5px; margin-top: 4px; max-height: 160px;
+      overflow-y: auto; z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .dropdown-list.show { display: block; }
+    .dropdown-option { padding: 10px 12px; font-size: 13px; cursor: pointer; border-bottom: 1px solid #f1f5f9; transition: background 0.2s; }
+    .dropdown-option:last-child { border-bottom: none; }
+    .dropdown-option:hover { background: #f4f7f9; color: var(--azul-oscuro); font-weight: 700; }
+    .no-results { padding: 10px 12px; font-size: 12px; color: var(--gris); font-style: italic; text-align: center; }
+    /* ========================================= */
+
+    /* Tabla de Checklist */
+    table { width: 100%; border-collapse: collapse; margin-top: 5px; font-size: 11px; border: 1px solid #e1e5eb; border-radius: 5px; overflow: hidden; }
+    th { background: #f8f9fa; color: var(--azul-oscuro); padding: 10px; text-align: center; text-transform: uppercase; font-size: 10px; }
+    td { padding: 8px 10px; border-bottom: 1px solid #e1e5eb; text-align: center; }
+    td.aspecto { text-align: left; font-weight: 600; color: #495057; }
+    tr:hover td { background: #f4f7f9; }
+    input[type="radio"] { accent-color: var(--azul-oscuro); width: 15px; height: 15px; cursor: pointer; margin: 0; }
+    .row-invalid { background-color: #fff5f5; }
+
+    /* Badge Conformidad */
+    .badge { width: 100%; padding: 10px; border-radius: 5px; text-align: center; font-weight: 800; font-size: 13px; background: #eee; border: 1px solid #ddd; transition: all 0.3s; box-sizing: border-box; }
+    .badge-conforme { background: #ecfdf5; color: #059669; border-color: #10b981; }
+    .badge-noconforme { background: #fef2f2; color: #dc2626; border-color: #ef4444; }
+
+    .footer { display: flex; justify-content: space-between; padding: 15px; background: white; border-top: 1px solid #e1e5eb; position: fixed; bottom: 0; width: 100%; box-sizing: border-box; z-index: 10;}
+    
+    button { padding: 10px 20px; border-radius: 5px; font-weight: 700; cursor: pointer; font-size: 12px; transition: 0.2s; }
+    .btn-cancel { background: transparent; border: 1px solid var(--gris); color: var(--gris); }
+    .btn-save { background: var(--azul-oscuro); border: none; color: white; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .btn-save:hover:not(:disabled) { background: #0d4d8d; }
+
+    /* Spinner Inicial */
+    #loader { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(255, 255, 255, 0.9); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 1000; }
+    .spinner { width: 40px; height: 40px; border-radius: 50%; border: 4px solid transparent; border-top-color: var(--azul-oscuro); border-right-color: var(--lima); border-bottom-color: var(--cian); border-left-color: var(--gris); animation: spin 0.9s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    /* ====== NUEVO: PANTALLA DE CARGA Y ÉXITO ====== */
+    #overlay-submit {
+      display: none;
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(255, 255, 255, 0.85); /* Blanco semi transparente */
+      backdrop-filter: blur(4px); /* Efecto difuminado del fondo */
+      z-index: 3000;
+      flex-direction: column; justify-content: center; align-items: center;
+      text-align: center;
+      animation: fadeInOverlay 0.3s ease-in-out;
+    }
+    @keyframes fadeInOverlay { from { opacity: 0; } to { opacity: 1; } }
+    
+    .submit-spinner {
+      width: 55px; height: 55px; border-radius: 50%;
+      border: 5px solid #e1e5eb; border-top-color: var(--azul-oscuro);
+      border-bottom-color: var(--lima);
+      animation: spin 1s linear infinite; margin-bottom: 20px;
+    }
+    
+    .submit-icon-success {
+      display: none; font-size: 65px; margin-bottom: 10px;
+      animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    @keyframes popIn { 0% { transform: scale(0.3); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+    
+    .submit-title { font-size: 18px; font-weight: 800; color: var(--azul-oscuro); margin: 0 0 8px 0; transition: color 0.3s;}
+    .submit-text { font-size: 13px; color: var(--gris); margin: 0; font-weight: 500;}
+    /* ============================================== */
+
+    /* Toasts */
+    #toast-container { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 2000; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+    .toast { padding: 10px 20px; border-radius: 6px; color: white; font-size: 12px; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,0.15); opacity: 0; transform: translateY(-20px); transition: all 0.3s ease-out; display: flex; align-items: center; gap: 8px; }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast-error { background-color: var(--error); }
+  </style>
+</head>
+<body>
+
+  <div id="toast-container"></div>
+  
+  <div id="loader">
+    <div class="spinner"></div>
+    <p style="margin-top:15px; font-size:12px; font-weight:700; color:var(--azul-oscuro)">Cargando Datos...</p>
+  </div>
+
+  <!-- PANTALLA DIFUMINADA PARA EL GUARDADO -->
+  <div id="overlay-submit">
+    <div class="submit-spinner" id="submit-spinner"></div>
+    <div class="submit-icon-success" id="submit-icon-success">✅</div>
+    <h3 class="submit-title" id="submit-title">Registrando información...</h3>
+    <p class="submit-text" id="submit-text">Por favor, no cierre la ventana.</p>
+  </div>
+
+  <div class="modal-header">
+    <h2>Seguimiento Mensual - Equipo</h2>
+  </div>
+
+  <div class="content">
+    <div class="card">
+      <div class="card-title">Identificación del Equipo</div>
+      <div class="grid">
+        <div class="field">
+          <label>Fecha de Inspección</label>
+          <input type="text" id="fecha" class="read-only" readonly>
+        </div>
+        
+        <div class="field">
+          <label>Código del Equipo</label>
+          <div class="dropdown-container">
+            <input type="text" id="equipoCodigo" placeholder="Escriba o seleccione..." autocomplete="off" onfocus="mostrarOpciones()" oninput="filtrarOpciones()">
+            <span class="dropdown-chevron">▼</span>
+            <div class="dropdown-list" id="listaOpciones"></div>
+          </div>
+        </div>
+
+      </div>
+      <div class="field" style="margin-top:-5px;">
+        <label>Área</label>
+        <input type="text" id="equipoArea" class="read-only" readonly placeholder="Área automática">
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Checklist de Condiciones (pH-metro / ISE)</div>
+      <table id="tablaChecklist">
+        <thead>
+          <tr>
+            <th style="text-align: left; padding-left:10px;">Aspecto Físico y Operativo</th>
+            <th style="width: 60px;">Cumple</th>
+            <th style="width: 60px;">Falla</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Resultado y Acciones</div>
+      <div class="field">
+        <label>Estado General</label>
+        <div id="statusBadge" class="badge">Pendiente de evaluación</div>
+      </div>
+      <div class="grid" style="margin-top: 15px;">
+        <div class="field">
+          <label>Observación(es)*</label>
+          <textarea id="observaciones" rows="2" placeholder="Detalle hallazgos (o 'Ninguna')"></textarea>
+        </div>
+        <div class="field">
+          <label>Corrección(es)*</label>
+          <textarea id="correcciones" rows="2" placeholder="Acción tomada (o 'N/A')"></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <button type="button" class="btn-cancel" onclick="google.script.host.close()">CERRAR</button>
+    <button type="button" class="btn-save" id="btnRegistrar" onclick="intentarRegistrar()">
+      <span id="btnLabel">REGISTRAR SEGUIMIENTO</span>
+    </button>
+  </div>
+
+  <script>
+    let dataMatriz = {};
+    
+    // Ítems especializados para un pH-metro con electrodo Ion Selectivo
+    const aspectos = [
+      'Carcasa, panel frontal y display limpios y sin daños',
+      'Membrana sensora limpia, sin rayaduras profundas ni desgaste excesivo',
+      'Teclado / botones operando suavemente y sin trabas',
+      'Cables de alimentación y de electrodos sin cortes ni exposición',
+      'Conectores BNC/Din limpio, libre de humedad, polvo u oxidación',
+      'Brazo articulado / soporte de electrodos firme y estable',
+      'Cuerpo del electrodo ISE sin grietas, desgaste mecánico ni fugas',
+      'Solución interna / electrolito libre de cristalización o contaminación',
+      'Lectura de señal (mV) estable, sin fluctuaciones erraticas al sumergir',
+      'Etiqueta de calibración / mantenimiento vigente y legible'
+    ];
+
+    window.onload = () => {
+      const hoy = new Date();
+      document.getElementById('fecha').value = hoy.getFullYear() + '-' + String(hoy.getMonth() + 1).padStart(2, '0') + '-' + String(hoy.getDate()).padStart(2, '0');
+
+      const tbody = document.querySelector('#tablaChecklist tbody');
+      aspectos.forEach((txt, i) => {
+        tbody.insertAdjacentHTML('beforeend', `
+          <tr id="row${i}">
+            <td class="aspecto">${txt}</td>
+            <td><input type="radio" name="chk${i}" value="Conforme" onchange="calcularConformidad(${i})"></td>
+            <td><input type="radio" name="chk${i}" value="No conforme" onchange="calcularConformidad(${i})"></td>
+          </tr>
+        `);
+      });
+
+      google.script.run
+        .withSuccessHandler(datos => {
+          dataMatriz = datos;
+          poblarEquipos();
+          document.getElementById('loader').style.display = 'none';
+          asignarEventosValidacion();
+        })
+        .obtenerDatosMatriz();
+    };
+
+    function poblarEquipos() {
+      const lista = document.getElementById('listaOpciones');
+      lista.innerHTML = '';
+      dataMatriz.equipos.forEach(eq => {
+        let div = document.createElement('div');
+        div.className = 'dropdown-option';
+        div.innerText = eq.codigo;
+        div.onclick = () => {
+          document.getElementById('equipoCodigo').value = eq.codigo;
+          document.getElementById('equipoCodigo').classList.remove('invalid');
+          lista.classList.remove('show');
+          seleccionarEquipo();
+        };
+        lista.appendChild(div);
+      });
+    }
+
+    function mostrarOpciones() {
+      document.getElementById('listaOpciones').classList.add('show');
+      filtrarOpciones();
+    }
+
+    function filtrarOpciones() {
+      const input = document.getElementById('equipoCodigo').value.toUpperCase();
+      const lista = document.getElementById('listaOpciones');
+      const opciones = lista.getElementsByClassName('dropdown-option');
+      let visibles = 0;
+
+      for (let i = 0; i < opciones.length; i++) {
+        let txtValue = opciones[i].innerText;
+        if (txtValue.toUpperCase().indexOf(input) > -1) {
+          opciones[i].style.display = "";
+          visibles++;
+        } else {
+          opciones[i].style.display = "none";
+        }
+      }
+
+      let noRes = document.getElementById('no-results-msg');
+      if (visibles === 0) {
+        if (!noRes) {
+          noRes = document.createElement('div');
+          noRes.id = 'no-results-msg';
+          noRes.className = 'no-results';
+          noRes.innerText = 'No se encontró el equipo';
+          lista.appendChild(noRes);
+        }
+      } else {
+        if (noRes) noRes.remove();
+      }
+      
+      seleccionarEquipo();
+    }
+
+    document.addEventListener('click', function(event) {
+      const container = document.querySelector('.dropdown-container');
+      if (!container.contains(event.target)) {
+        document.getElementById('listaOpciones').classList.remove('show');
+      }
+    });
+
+    function seleccionarEquipo() {
+      const cod = document.getElementById('equipoCodigo').value;
+      const eq = dataMatriz.equipos.find(x => x.codigo === cod);
+      if(eq) {
+        document.getElementById('equipoArea').value = eq.area;
+      } else {
+        document.getElementById('equipoArea').value = '';
+      }
+    }
+
+    function mostrarToastError(mensaje) {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = `toast toast-error`;
+      toast.innerHTML = `⚠️ ${mensaje}`;
+      container.appendChild(toast);
+      setTimeout(() => toast.classList.add('show'), 10);
+      setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); }, 3500);
+    }
+
+    function asignarEventosValidacion() {
+      const inputs = document.querySelectorAll('input:not([type="radio"]), textarea');
+      inputs.forEach(input => {
+        input.addEventListener('input', function() {
+          if (this.value.trim() !== "") this.classList.remove('invalid');
+        });
+      });
+    }
+
+    function calcularConformidad(rowIndex) {
+      document.getElementById(`row${rowIndex}`).classList.remove('row-invalid');
+
+      let evaluados = 0;
+      let noConforme = false;
+      
+      aspectos.forEach((_, i) => {
+        const seleccionado =[...document.getElementsByName(`chk${i}`)].find(r => r.checked);
+        if (seleccionado) {
+          evaluados++;
+          if (seleccionado.value === 'No conforme') noConforme = true;
+        }
+      });
+
+      const badge = document.getElementById('statusBadge');
+      if (evaluados === aspectos.length) {
+        badge.innerText = noConforme ? 'NO CONFORME' : 'CONFORME';
+        badge.className = `badge ${noConforme ? 'badge-noconforme' : 'badge-conforme'}`;
+      } else {
+        badge.innerText = `Evaluados ${evaluados}/${aspectos.length}`;
+        badge.className = 'badge';
+      }
+    }
+
+    function intentarRegistrar() {
+      const cod = document.getElementById('equipoCodigo');
+      const eq = dataMatriz.equipos.find(x => x.codigo === cod.value);
+      
+      let hayErrores = false;
+
+      // 1. Validar Código
+      if (!cod.value || !eq) {
+        cod.classList.add('invalid');
+        mostrarToastError("Seleccione un equipo válido de la lista");
+        hayErrores = true;
+      }
+
+      // 2. Validar Checklist
+      let faltanCheck = false;
+      aspectos.forEach((_, i) => {
+        const checkeado = [...document.getElementsByName(`chk${i}`)].some(r => r.checked);
+        if (!checkeado) {
+          document.getElementById(`row${i}`).classList.add('row-invalid');
+          faltanCheck = true;
+        }
+      });
+
+      if (faltanCheck) {
+        mostrarToastError("Complete todo el checklist de condiciones");
+        hayErrores = true;
+      }
+
+      // 3. Validar Textareas
+      const obs = document.getElementById('observaciones');
+      const corr = document.getElementById('correcciones');
+
+      if (obs.value.trim() === '') {
+        obs.classList.add('invalid');
+        hayErrores = true;
+      }
+      if (corr.value.trim() === '') {
+        corr.classList.add('invalid');
+        hayErrores = true;
+      }
+
+      if(hayErrores && (obs.value.trim() === '' || corr.value.trim() === '')){
+         mostrarToastError("Todos los campos de texto son obligatorios");
+      }
+
+      if (hayErrores) return;
+
+      const estadoFinal = document.getElementById('statusBadge').innerText;
+      const detalleAspectos = aspectos.map((txt, i) => {
+        const rad =[...document.getElementsByName(`chk${i}`)].find(x => x.checked);
+        return `${txt} (${rad.value})`;
+      }).join('; \n');
+
+      const datos = {
+        codigo: cod.value,
+        area: document.getElementById('equipoArea').value,
+        estado: estadoFinal === 'CONFORME' ? 'Conforme' : 'No conforme',
+        aspectos: detalleAspectos,
+        observaciones: obs.value.trim(),
+        correcciones: corr.value.trim()
+      };
+
+      // MOSTRAR PANTALLA DE CARGA CENTRAL
+      document.getElementById('overlay-submit').style.display = 'flex';
+      document.getElementById('submit-spinner').style.display = 'block';
+      document.getElementById('submit-icon-success').style.display = 'none';
+      document.getElementById('submit-title').innerText = 'Registrando información...';
+      document.getElementById('submit-title').style.color = 'var(--azul-oscuro)';
+      document.getElementById('submit-text').innerText = 'Por favor, no cierre la ventana.';
+
+      google.script.run
+        .withSuccessHandler((res) => {
+          // TRANSICIÓN AL MENSAJE DE ÉXITO
+          document.getElementById('submit-spinner').style.display = 'none';
+          document.getElementById('submit-icon-success').style.display = 'block';
+          
+          document.getElementById('submit-title').innerText = '¡Proceso Completado!';
+          document.getElementById('submit-title').style.color = 'var(--success)';
+          
+          document.getElementById('submit-text').innerText = res + '\nCerrando ventana...';
+          
+          // Cerrar automáticamente después de mostrar el éxito
+          setTimeout(() => google.script.host.close(), 2500);
+        })
+        .withFailureHandler((err) => {
+          // OCULTAR PANTALLA Y MOSTRAR TOAST DE ERROR
+          document.getElementById('overlay-submit').style.display = 'none';
+          mostrarToastError(err.message);
+        })
+        .registrarSeguimiento(datos);
+    }
+  </script>
+</body>
+</html>

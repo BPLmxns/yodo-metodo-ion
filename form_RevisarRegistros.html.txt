@@ -1,0 +1,340 @@
+<!-- form_RevisarRegistros.html -->
+
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    :root {
+      --lima: #afcc46;
+      --cian: #00abe6;
+      --azul-oscuro: #0a4079;
+      --gris: #6b7280;
+      --blanco: #ffffff;
+      --fondo: #f4f7f9;
+      --success: #059669;
+      --danger: #dc2626;
+    }
+
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--fondo); margin: 0; padding: 20px; color: #333; }
+
+    .header-title { color: var(--azul-oscuro); text-transform: uppercase; font-size: 16px; margin-bottom: 5px; font-weight: 800; display: flex; align-items: center; gap: 10px; }
+    .header-title::before { content: ""; width: 5px; height: 20px; background: var(--lima); border-radius: 4px; }
+    .header-subtitle { color: var(--gris); font-size: 12px; font-weight: 600; margin-left: 15px; margin-bottom: 20px; }
+
+    .segment-title { color: var(--gris); font-size: 11px; text-transform: uppercase; font-weight: 800; margin-bottom: 10px; display: flex; align-items: center; gap: 5px; }
+    .segment-title::before { content: ""; width: 3px; height: 10px; background: var(--cian); border-radius: 4px; }
+
+    .card { background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 25px; border: 1px solid #e1e5eb; position: relative; min-height: 80px; }
+
+    .conteo { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 15px; }
+    .conteo-card { padding: 15px; border-radius: 8px; text-align: center; background: #f8fafc; border: 1px solid #e2e8f0; }
+    .conteo-card span { display: block; font-size: 24px; font-weight: 800; margin-top: 5px; }
+    
+    .conforme { color: var(--success); border-left: 4px solid var(--success); }
+    .no-conforme { color: var(--danger); border-left: 4px solid var(--danger); }
+    .pendiente { color: var(--azul-oscuro); border-left: 4px solid var(--azul-oscuro); }
+
+    .toggle-btn { display: flex; justify-content: space-between; align-items: center; width: 100%; background: #f1f5f9; border: 1px solid #e2e8f0; padding: 12px 20px; border-radius: 6px; font-size: 12px; font-weight: 700; color: var(--azul-oscuro); cursor: pointer; margin-bottom: 8px; transition: all 0.2s; text-transform: uppercase; border-left: 3px solid var(--lima); }
+    .toggle-btn:hover { background: var(--azul-oscuro); color: white; border-left-color: var(--cian); }
+
+    .detalle { display: none; margin-top: 10px; margin-bottom: 20px; overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 8px; }
+
+    table { width: 100%; border-collapse: collapse; min-width: 500px; background: white; }
+    th { background: #f8f9fa; color: var(--azul-oscuro); padding: 12px 15px; font-size: 11px; text-transform: uppercase; text-align: center; border-bottom: 2px solid #e1e5eb; }
+    td { padding: 10px 15px; font-size: 12px; border-bottom: 1px solid #e1e5eb; text-align: center; vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f1f5f9; }
+
+    .spinner-seccion { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+    .loader { width: 30px; height: 30px; border: 4px solid transparent; border-top-color: var(--azul-oscuro); border-right-color: var(--lima); border-bottom-color: var(--cian); border-left-color: var(--gris); border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    .botones-final { display: flex; justify-content: flex-end; gap: 15px; margin-top: 20px; padding-top: 20px; border-top: 1px solid #e1e5eb; }
+    button:not(.toggle-btn) { padding: 12px 24px; border-radius: 6px; font-weight: 700; cursor: pointer; border: none; transition: all 0.2s; font-size: 12px; }
+    .boton-cancelar { background: transparent; border: 1px solid var(--gris); color: var(--gris); }
+    .boton-cancelar:hover { background: #f1f5f9; }
+    .boton-firmar { background: var(--azul-oscuro); color: white; display: flex; align-items: center; gap: 10px; }
+    .boton-firmar:hover { background: #0d4d8b; transform: translateY(-1px); }
+    .boton-firmar:disabled { background: #94a3b8; cursor: not-allowed; transform: none; }
+
+    /* ====== BADGE ====== */
+    .badge { width: 100%; padding: 4px 8px; border-radius: 4px; text-align: center; font-weight: 800; font-size: 10px; text-transform: uppercase; border: 1px solid transparent; display:inline-block; box-sizing: border-box;}
+    .badge-conforme { background: #ecfdf5; color: #059669; border-color: #10b981; }
+    .badge-noconforme { background: #fef2f2; color: #dc2626; border-color: #ef4444; }
+
+    #toast { display: none; position: fixed; top: 20px; right: 20px; padding: 15px 25px; border-radius: 8px; color: white; font-weight: 600; font-size: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 1000; animation: slideIn 0.3s ease-out; }
+    .toast-success { background: var(--azul-oscuro); border-bottom: 3px solid var(--lima); }
+    .toast-error { background: var(--danger); border-bottom: 3px solid white; }
+    @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+  </style>
+</head>
+<body>
+
+  <div id="toast"></div>
+
+  <div class="header-title">Revisión de Registros</div>
+  <div class="header-subtitle" id="equipoLabel">Equipo: Todos</div>
+
+  <!-- SEGMENTO 1: VERIFICACIONES -->
+  <div class="segment-title">1. Verificaciones del Electrodo ISE Yoduro</div>
+  <div class="card" id="seg1">
+    <div class="spinner-seccion" id="spin1"><div class="loader"></div></div>
+    <div id="cont1" style="display:none">
+      <div class="conteo">
+        <div class="conteo-card conforme">
+          <small style="color:var(--success); font-weight:bold;">CONFORMES PENDIENTES</small>
+          <span id="conteoConforme">0</span>
+        </div>
+        <div class="conteo-card no-conforme">
+          <small style="color:var(--danger); font-weight:bold;">NO CONFORMES PENDIENTES</small>
+          <span id="conteoNoConforme">0</span>
+        </div>
+      </div>
+      
+      <button class="toggle-btn" onclick="toggleDetalle('conformeDetalle', this)">Ver Conformidades <span>▼</span></button>
+      <div class="detalle" id="conformeDetalle">
+        <table>
+          <thead>
+            <tr><th>Fecha y Hora</th><th>Diferencia (mV)</th><th>Conformidad</th><th>Responsable</th></tr>
+          </thead>
+          <tbody id="tbodyConforme"></tbody>
+        </table>
+      </div>
+      
+      <button class="toggle-btn" onclick="toggleDetalle('noConformeDetalle', this)" style="margin-top:10px;">Ver No Conformidades <span>▼</span></button>
+      <div class="detalle" id="noConformeDetalle">
+        <table>
+          <thead>
+            <tr><th>Fecha y Hora</th><th>Diferencia (mV)</th><th>Conformidad</th><th>Responsable</th></tr>
+          </thead>
+          <tbody id="tbodyNoConforme"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- SEGMENTO 2: REGISTRO DE USO -->
+  <div class="segment-title">2. Registro de Uso del Equipo</div>
+  <div class="card" id="seg2">
+    <div class="spinner-seccion" id="spin2"><div class="loader"></div></div>
+    <div id="cont2" style="display:none">
+      <div class="conteo">
+        <div class="conteo-card pendiente">
+          <small style="color:var(--azul-oscuro); font-weight:bold;">USOS POR FIRMAR</small>
+          <span id="conteoUso">0</span>
+        </div>
+      </div>
+      <button class="toggle-btn" onclick="toggleDetalle('usoDetalle', this)">Ver Registros de Uso <span>▼</span></button>
+      <div class="detalle" id="usoDetalle">
+        <table style="min-width: 800px;">
+          <thead>
+            <tr>
+              <th style="width: 15%;">Fecha y Hora</th>
+              <th style="width: 12%;">Control</th>
+              <th style="width: 33%; text-align:left;">Producto</th>
+              <th style="width: 12%;">Verificación</th>
+              <th style="width: 14%;">Drenado</th>
+              <th style="width: 14%;">Limpieza</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyUso"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- SEGMENTO 3: SEGUIMIENTOS EXTERNOS -->
+  <div class="segment-title">3. Seguimientos Mensuales de Equipos</div>
+  <div class="card" id="seg3">
+    <div class="spinner-seccion" id="spin3"><div class="loader"></div></div>
+    <div id="cont3" style="display:none">
+      <div class="conteo">
+        <div class="conteo-card pendiente">
+          <small style="color:var(--azul-oscuro); font-weight:bold;">SEGUIMIENTOS POR FIRMAR</small>
+          <span id="conteoSeguimiento">0</span>
+        </div>
+      </div>
+      <button class="toggle-btn" onclick="toggleDetalle('seguimientoDetalle', this)">Ver Seguimientos <span>▼</span></button>
+      <div class="detalle" id="seguimientoDetalle">
+        <table>
+          <thead><tr><th>Equipo</th><th>Fecha</th><th>Estado</th><th style="text-align:left;">Aspectos Físicos</th><th>Observación</th></tr></thead>
+          <tbody id="tbodySeguimiento"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="botones-final">
+    <button class="boton-cancelar" onclick="cerrarVista()">SALIR DE LA REVISIÓN</button>
+    <button class="boton-firmar" id="btnFirmar" onclick="ejecutarFirma()">
+      <div class="loader" id="spinFirmar" style="display:none; width:15px; height:15px; border-width:2px; border-top-color:white; border-bottom-color:white;"></div>
+      <span id="txtBtn">FIRMAR Y VALIDAR</span>
+    </button>
+  </div>
+
+  <script>
+    const equipoFiltrado = "<?= equipoTarget ?>";
+
+    function formatNum(val) {
+      if (val === "" || val === null || val === "NA") return val;
+      return val.toString().replace('.', ',');
+    }
+
+    function mostrarToast(msg, tipo = "success") {
+      const toast = document.getElementById('toast');
+      toast.innerText = tipo === "error" ? `⚠️ ${msg}` : `✅ ${msg}`;
+      toast.className = tipo === "error" ? "toast-error" : "toast-success";
+      toast.style.display = 'block';
+      setTimeout(() => { toast.style.display = 'none'; }, 3500);
+    }
+
+    function toggleDetalle(id, btn) {
+      const div = document.getElementById(id);
+      const isVisible = div.style.display === 'block';
+      div.style.display = isVisible ? 'none' : 'block';
+      btn.querySelector('span').innerText = isVisible ? '▼' : '▲';
+    }
+
+    // ====== LLENAR SEGMENTO 1: VERIFICACIONES ======
+    function llenarVerificaciones(datos) {
+      document.getElementById('spin1').style.display = 'none';
+      document.getElementById('cont1').style.display = 'block';
+      document.getElementById('conteoConforme').innerText = datos.conforme.length;
+      document.getElementById('conteoNoConforme').innerText = datos.noConforme.length;
+
+      const tbC = document.getElementById('tbodyConforme');
+      if (datos.conforme.length === 0) tbC.innerHTML = "<tr><td colspan='4'>No hay datos pendientes</td></tr>";
+      else {
+        tbC.innerHTML = "";
+        datos.conforme.forEach(r => { 
+          tbC.innerHTML += `<tr>
+            <td>${r[0]}</td>
+            <td><strong>${formatNum(r[1])} mV</strong></td>
+            <td style="color:var(--success); font-weight:bold;">${r[2]}</td>
+            <td>${r[3]}</td>
+          </tr>`; 
+        });
+      }
+
+      const tbNC = document.getElementById('tbodyNoConforme');
+      if (datos.noConforme.length === 0) tbNC.innerHTML = "<tr><td colspan='4'>No hay datos pendientes</td></tr>";
+      else {
+        tbNC.innerHTML = "";
+        datos.noConforme.forEach(r => { 
+          tbNC.innerHTML += `<tr>
+            <td>${r[0]}</td>
+            <td><strong style="color:var(--danger)">${formatNum(r[1])} mV</strong></td>
+            <td style="color:var(--danger); font-weight:bold;">${r[2]}</td>
+            <td>${r[3]}</td>
+          </tr>`; 
+        });
+      }
+    }
+
+    // ====== LLENAR SEGMENTO 2: REGISTRO DE USO ======
+    function llenarUsos(datos) {
+      document.getElementById('spin2').style.display = 'none';
+      document.getElementById('cont2').style.display = 'block';
+      document.getElementById('conteoUso').innerText = datos.length;
+
+      const tb = document.getElementById('tbodyUso');
+      if (datos.length === 0) tb.innerHTML = "<tr><td colspan='6'>No hay datos pendientes</td></tr>";
+      else {
+        tb.innerHTML = "";
+        
+        // Helper para pintar badges dinámicos
+        const getBadge = (txt) => {
+          let uTxt = String(txt).toUpperCase();
+          if(uTxt.includes('NO CUMPLE')) return `<span class="badge badge-noconforme">${txt}</span>`;
+          if(uTxt.includes('CUMPLE')) return `<span class="badge badge-conforme">${txt}</span>`;
+          return txt; // Por defecto
+        };
+
+        datos.forEach(r => {
+          tb.innerHTML += `<tr>
+            <td>${r[0]}</td>
+            <td><strong>${r[1]}</strong></td>
+            <td style="text-align:left; color:var(--gris);">${r[2]}</td>
+            <td>${getBadge(r[3])}</td>
+            <td>${getBadge(r[4])}</td>
+            <td>${getBadge(r[5])}</td>
+          </tr>`;
+        });
+      }
+    }
+
+    // ====== LLENAR SEGMENTO 3: SEGUIMIENTOS ======
+    function llenarSeguimientos(datos) {
+      document.getElementById('spin3').style.display = 'none';
+      document.getElementById('cont3').style.display = 'block';
+      document.getElementById('conteoSeguimiento').innerText = datos.length;
+
+      const tb = document.getElementById('tbodySeguimiento');
+      if (datos.length === 0) tb.innerHTML = "<tr><td colspan='5'>No hay datos pendientes</td></tr>";
+      else {
+        tb.innerHTML = "";
+        datos.forEach(r => {
+          let estadoColor = (r[2] === 'Conforme') ? 'color:var(--success)' : 'color:var(--danger)';
+          let aspectosTxt = r[3].replace(/; \n/g, "<br>").replace(/\n/g, "<br>");
+          
+          tb.innerHTML += `<tr>
+            <td><strong>${r[0]}</strong></td>
+            <td>${r[1]}</td>
+            <td style="${estadoColor}; font-weight:bold;">${r[2]}</td>
+            <td style="text-align:left; font-size:11px; line-height:1.4;">${aspectosTxt}</td>
+            <td style="text-align:left;">${r[4] || '-'}</td>
+          </tr>`;
+        });
+      }
+    }
+
+    // ====== ACCIONES ======
+    function cerrarVista() {
+      if (google.script.host) google.script.host.close();
+      else alert("Ya no hay acciones pendientes. Puede cerrar esta pestaña de su navegador de forma segura.");
+    }
+
+    function ejecutarFirma() {
+      const btn = document.getElementById('btnFirmar');
+      const spin = document.getElementById('spinFirmar');
+      btn.disabled = true;
+      document.getElementById('txtBtn').innerText = "FIRMANDO...";
+      spin.style.display = 'inline-block';
+
+      google.script.run
+        .withSuccessHandler((res) => {
+          document.body.innerHTML = `
+            <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:90vh; background:white; border-radius:10px; border-top: 5px solid var(--lima);">
+              <div style="font-size:50px; color:var(--azul-oscuro); margin-bottom:10px;">🛡️</div>
+              <h2 style="color:var(--azul-oscuro); margin:0;">¡Firma Validada!</h2>
+              <p style="color:var(--gris); font-size:13px; text-align:center; padding:0 20px; margin-bottom: 25px;">${res}</p>
+              <div style="background: #f8fafc; border: 1px solid #e1e5eb; padding: 20px 30px; border-radius: 8px; text-align: center;">
+                <h3 style="color: var(--success); margin: 0 0 10px 0;">Proceso Terminado</h3>
+                <p style="color: var(--azul-oscuro); font-weight: 600; font-size: 14px; margin: 0;">Puede cerrar esta pestaña de su navegador con seguridad.</p>
+              </div>
+            </div>
+          `;
+          if (google.script.host) setTimeout(() => google.script.host.close(), 3000);
+        })
+        .withFailureHandler(err => {
+          mostrarToast(err.message, "error");
+          btn.disabled = false;
+          document.getElementById('txtBtn').innerText = "FIRMAR Y VALIDAR";
+          spin.style.display = 'none';
+        })
+        .firmarRegistros(equipoFiltrado);
+    }
+
+    window.onload = () => {
+      if (equipoFiltrado) {
+        document.getElementById('equipoLabel').innerText = "Filtrando exclusivamente el equipo: " + equipoFiltrado;
+        document.getElementById('equipoLabel').style.color = "var(--azul-oscuro)";
+      }
+      google.script.run.withSuccessHandler(llenarVerificaciones).obtenerVerificacionesPendientes(equipoFiltrado);
+      google.script.run.withSuccessHandler(llenarUsos).obtenerUsosPendientes(equipoFiltrado);
+      google.script.run.withSuccessHandler(llenarSeguimientos).obtenerSeguimientoPendientes(equipoFiltrado);
+    };
+  </script>
+</body>
+</html>

@@ -1,0 +1,336 @@
+<!-- form_RegistroVerificacion.html -->
+
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    :root {
+      --lima: #afcc46;
+      --cian: #00abe6;
+      --azul-oscuro: #0a4079;
+      --gris: #6b7280;
+      --fondo: #f4f7f9;
+      --error: #ef4444;
+      --success: #10b981;
+    }
+
+    body { font-family: 'Segoe UI', sans-serif; background: var(--fondo); margin: 0; padding: 0; color: #333; }
+    
+    .modal-header { background: var(--azul-oscuro); color: white; padding: 15px; text-align: center; border-bottom: 4px solid var(--lima); position: sticky; top: 0; z-index: 10; }
+    .modal-header h2 { margin: 0; font-size: 16px; text-transform: uppercase; letter-spacing: 1px; }
+
+    .content { padding: 15px; padding-bottom: 80px; }
+
+    .card { background: white; border-radius: 8px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #e1e5eb; }
+    
+    .card-title { font-size: 10px; font-weight: 800; color: var(--gris); text-transform: uppercase; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+    .card-title::before { content: ""; width: 3px; height: 10px; background: var(--cian); border-radius: 5px; }
+
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .field { margin-bottom: 10px; }
+    
+    label { display: block; font-size: 11px; font-weight: 700; color: var(--azul-oscuro); margin-bottom: 4px; }
+
+    input[type="text"], input[type="number"], select {
+      width: 100%; padding: 8px 10px; border: 1px solid #ced4da; border-radius: 5px; font-size: 13px; box-sizing: border-box; transition: all 0.2s;
+    }
+    input:focus, select:focus { border-color: var(--cian); outline: none; background: #fff; box-shadow: 0 0 0 3px rgba(0,171,230,0.1); }
+    
+    .read-only { background-color: #f1f5f9 !important; color: #475569; font-weight: 600; cursor: not-allowed; }
+    .invalid { border: 1.5px solid var(--error) !important; background-color: #fff5f5 !important; }
+
+    /* Estilo para los badges de conformidad */
+    .badge { width: 100%; padding: 12px; border-radius: 5px; text-align: center; font-weight: 800; font-size: 13px; background: #eee; border: 1px solid #ddd; transition: all 0.3s; box-sizing: border-box; text-transform: uppercase; }
+    .badge-conforme { background: #ecfdf5; color: #059669; border-color: #10b981; }
+    .badge-noconforme { background: #fef2f2; color: #dc2626; border-color: #ef4444; }
+
+    .footer { display: flex; justify-content: space-between; padding: 15px; background: white; border-top: 1px solid #e1e5eb; position: fixed; bottom: 0; width: 100%; box-sizing: border-box; z-index: 10;}
+    
+    button { padding: 10px 20px; border-radius: 5px; font-weight: 700; cursor: pointer; font-size: 12px; transition: 0.2s; }
+    .btn-cancel { background: transparent; border: 1px solid var(--gris); color: var(--gris); }
+    .btn-save { background: var(--azul-oscuro); border: none; color: white; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .btn-save:hover:not(:disabled) { background: #0d4d8d; }
+
+    /* Spinner de Carga Inicial */
+    #loader { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(255, 255, 255, 0.9); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 1000; }
+    .spinner { width: 40px; height: 40px; border-radius: 50%; border: 4px solid transparent; border-top-color: var(--azul-oscuro); border-right-color: var(--lima); border-bottom-color: var(--cian); border-left-color: var(--gris); animation: spin 0.9s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    /* ====== NUEVO: PANTALLA DE CARGA Y ÉXITO ====== */
+    #overlay-submit {
+      display: none;
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(4px);
+      z-index: 3000;
+      flex-direction: column; justify-content: center; align-items: center;
+      text-align: center;
+      animation: fadeInOverlay 0.3s ease-in-out;
+    }
+    @keyframes fadeInOverlay { from { opacity: 0; } to { opacity: 1; } }
+    
+    .submit-spinner {
+      width: 55px; height: 55px; border-radius: 50%;
+      border: 5px solid #e1e5eb; border-top-color: var(--azul-oscuro);
+      border-bottom-color: var(--lima);
+      animation: spin 1s linear infinite; margin-bottom: 20px;
+    }
+    
+    .submit-icon-success {
+      display: none; font-size: 65px; margin-bottom: 10px;
+      animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    @keyframes popIn { 0% { transform: scale(0.3); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+    
+    .submit-title { font-size: 18px; font-weight: 800; color: var(--azul-oscuro); margin: 0 0 8px 0; transition: color 0.3s;}
+    .submit-text { font-size: 13px; color: var(--gris); margin: 0; font-weight: 500;}
+    /* ============================================== */
+
+    /* Toasts */
+    #toast-container { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 2000; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+    .toast { padding: 10px 20px; border-radius: 6px; color: white; font-size: 12px; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,0.15); opacity: 0; transform: translateY(-20px); transition: all 0.3s ease-out; display: flex; align-items: center; gap: 8px; }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast-error { background-color: var(--error); }
+  </style>
+</head>
+<body>
+
+  <div id="toast-container"></div>
+  
+  <!-- Spinner cargando (Se desactivará al cargar datos de lotes) -->
+  <div id="loader">
+    <div class="spinner"></div>
+    <p style="margin-top:15px; font-size:12px; font-weight:700; color:var(--azul-oscuro)">Cargando Lotes y Parámetros...</p>
+  </div>
+
+  <!-- PANTALLA DIFUMINADA PARA EL GUARDADO -->
+  <div id="overlay-submit">
+    <div class="submit-spinner" id="submit-spinner"></div>
+    <div class="submit-icon-success" id="submit-icon-success">✅</div>
+    <h3 class="submit-title" id="submit-title">Registrando verificación...</h3>
+    <p class="submit-text" id="submit-text">Por favor, no cierre la ventana.</p>
+  </div>
+
+  <div class="modal-header">
+    <h2>Verificación Diaria - Electrodo ISE</h2>
+  </div>
+
+  <div class="content">
+    
+    <!-- TARJETA 1: IDENTIFICACIÓN Y REACTIVOS -->
+    <div class="card">
+      <div class="card-title">Identificación y Lotes</div>
+      <div class="field">
+        <label>Fecha y Hora de Inspección</label>
+        <input type="text" id="fechaHora" class="read-only" readonly>
+      </div>
+      
+      <div class="grid">
+        <div class="field">
+          <label>Lote Estándar Yoduro 1000 ppm</label>
+          <select id="loteYoduro">
+            <option value="">Seleccione un lote...</option>
+          </select>
+        </div>
+        
+        <div class="field">
+          <label>Lote Solución ISA</label>
+          <select id="loteIsa">
+            <option value="">Seleccione un lote...</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- TARJETA 2: RESPUESTAS INSTRUMENTALES -->
+    <div class="card">
+      <div class="card-title">Respuestas Instrumentales (Lecturas en mV)</div>
+      <p style="font-size:11px; color:var(--gris); margin-top:-5px; margin-bottom:12px;">Ingrese los valores medidos para cada volumen de estándar.</p>
+      
+      <div class="grid">
+        <div class="field">
+          <label>Respuesta (1 mL) - Yoduro [mV]</label>
+          <input type="number" id="resp1" step="0.1" placeholder="Ej: -45.2" oninput="calcularDiferenciaYConformidad()">
+        </div>
+        
+        <div class="field">
+          <label>Respuesta (10 mL) - Yoduro [mV]</label>
+          <input type="number" id="resp10" step="0.1" placeholder="Ej: -101.4" oninput="calcularDiferenciaYConformidad()">
+        </div>
+      </div>
+    </div>
+
+    <!-- TARJETA 3: EVALUACIÓN Y CONFORMIDAD -->
+    <div class="card">
+      <div class="card-title">Cálculo y Evaluación de Pendiente</div>
+      
+      <div class="field">
+        <label>Diferencia Potenciométrica (ΔmV)</label>
+        <input type="text" id="diferencia" class="read-only" readonly placeholder="Cálculo automático de |10 mL - 1 mL|">
+      </div>
+      
+      <div class="field" style="margin-top:15px;">
+        <label>Conformidad (Criterio: 54 ≤ ΔmV ≤ 60)</label>
+        <div id="statusBadge" class="badge">Pendiente de ingreso de mV</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="footer">
+    <button type="button" class="btn-cancel" onclick="google.script.host.close()">CERRAR</button>
+    <button type="button" class="btn-save" id="btnRegistrar" onclick="intentarRegistrar()">
+      <span id="btnLabel">REGISTRAR VERIFICACIÓN</span>
+    </button>
+  </div>
+
+  <script>
+    window.onload = () => {
+      const ahora = new Date();
+      const anio = ahora.getFullYear();
+      const mes = String(ahora.getMonth() + 1).padStart(2, '0');
+      const dia = String(ahora.getDate()).padStart(2, '0');
+      const horas = String(ahora.getHours()).padStart(2, '0');
+      const minutos = String(ahora.getMinutes()).padStart(2, '0');
+      
+      document.getElementById('fechaHora').value = `${anio}-${mes}-${dia} - ${horas}:${minutos}`;
+
+      google.script.run
+        .withSuccessHandler(poblarListasDesplegables)
+        .withFailureHandler(err => {
+          document.getElementById('loader').style.display = 'none';
+          mostrarToastError(err.message);
+        })
+        .obtenerLotesActivos();
+
+      asignarEventosValidacion();
+    };
+
+    function poblarListasDesplegables(lotes) {
+      const selectYoduro = document.getElementById('loteYoduro');
+      const selectIsa = document.getElementById('loteIsa');
+      
+      selectYoduro.innerHTML = '<option value="">Seleccione un lote...</option>';
+      selectIsa.innerHTML = '<option value="">Seleccione un lote...</option>';
+      
+      if (lotes.yoduro.length === 0) {
+        selectYoduro.innerHTML += '<option value="" disabled>No hay lotes vigentes</option>';
+      } else {
+        lotes.yoduro.forEach(lote => { selectYoduro.innerHTML += `<option value="${lote}">${lote}</option>`; });
+      }
+      
+      if (lotes.isa.length === 0) {
+        selectIsa.innerHTML += '<option value="" disabled>No hay lotes vigentes</option>';
+      } else {
+        lotes.isa.forEach(lote => { selectIsa.innerHTML += `<option value="${lote}">${lote}</option>`; });
+      }
+      
+      document.getElementById('loader').style.display = 'none';
+    }
+
+    function calcularDiferenciaYConformidad() {
+      const val1 = parseFloat(document.getElementById('resp1').value);
+      const val10 = parseFloat(document.getElementById('resp10').value);
+      const campoDiferencia = document.getElementById('diferencia');
+      const badge = document.getElementById('statusBadge');
+
+      if (!isNaN(val1) && !isNaN(val10)) {
+        const diferencia = Math.abs(val10 - val1);
+        campoDiferencia.value = diferencia.toFixed(1) + " mV";
+
+        if (diferencia >= 54.0 && diferencia <= 60.0) {
+          badge.innerText = "CONFORME";
+          badge.className = "badge badge-conforme";
+        } else {
+          badge.innerText = "NO CONFORME";
+          badge.className = "badge badge-noconforme";
+        }
+      } else {
+        campoDiferencia.value = "";
+        badge.innerText = "Pendiente de ingreso de mV";
+        badge.className = "badge";
+      }
+    }
+
+    function mostrarToastError(mensaje) {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = `toast toast-error`;
+      toast.innerHTML = `⚠️ ${mensaje}`;
+      container.appendChild(toast);
+      setTimeout(() => toast.classList.add('show'), 10);
+      setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); }, 3500);
+    }
+
+    function asignarEventosValidacion() {
+      const inputs = document.querySelectorAll('input:not(.read-only), select');
+      inputs.forEach(input => {
+        input.addEventListener('input', function() {
+          if (this.value.trim() !== "") this.classList.remove('invalid');
+        });
+      });
+    }
+
+    function intentarRegistrar() {
+      const loteYod = document.getElementById('loteYoduro');
+      const loteIs = document.getElementById('loteIsa');
+      const r1 = document.getElementById('resp1');
+      const r10 = document.getElementById('resp10');
+      const badge = document.getElementById('statusBadge');
+
+      let hayErrores = false;
+
+      if (!loteYod.value) { loteYod.classList.add('invalid'); hayErrores = true; }
+      if (!loteIs.value) { loteIs.classList.add('invalid'); hayErrores = true; }
+      if (r1.value === "") { r1.classList.add('invalid'); hayErrores = true; }
+      if (r10.value === "") { r10.classList.add('invalid'); hayErrores = true; }
+
+      if (hayErrores) {
+        mostrarToastError("Todos los campos del formulario son de diligenciamiento obligatorio");
+        return;
+      }
+
+      const val1 = parseFloat(r1.value);
+      const val10 = parseFloat(r10.value);
+      const diff = Math.abs(val10 - val1);
+
+      const datos = {
+        loteYoduro: loteYod.value,
+        loteIsa: loteIs.value,
+        resp1: val1,
+        resp10: val10,
+        diferencia: diff,
+        conformidad: badge.innerText
+      };
+
+      // MOSTRAR PANTALLA DE CARGA CENTRAL
+      document.getElementById('overlay-submit').style.display = 'flex';
+      document.getElementById('submit-spinner').style.display = 'block';
+      document.getElementById('submit-icon-success').style.display = 'none';
+      document.getElementById('submit-title').innerText = 'Registrando verificación...';
+      document.getElementById('submit-title').style.color = 'var(--azul-oscuro)';
+      document.getElementById('submit-text').innerText = 'Por favor, no cierre la ventana.';
+
+      google.script.run
+        .withSuccessHandler((res) => {
+          // TRANSICIÓN AL MENSAJE DE ÉXITO
+          document.getElementById('submit-spinner').style.display = 'none';
+          document.getElementById('submit-icon-success').style.display = 'block';
+          
+          document.getElementById('submit-title').innerText = '¡Proceso Completado!';
+          document.getElementById('submit-title').style.color = 'var(--success)';
+          document.getElementById('submit-text').innerText = res + '\nCerrando ventana...';
+          
+          setTimeout(() => { google.script.host.close(); }, 2500);
+        })
+        .withFailureHandler((err) => {
+          // OCULTAR PANTALLA Y MOSTRAR TOAST DE ERROR
+          document.getElementById('overlay-submit').style.display = 'none';
+          mostrarToastError(err.message);
+        })
+        .guardarVerificacion(datos);
+    }
+  </script>
+</body>
+</html>
