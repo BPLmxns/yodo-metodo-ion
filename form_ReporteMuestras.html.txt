@@ -571,7 +571,7 @@
           <!-- NOTA: Añadí text-transform: uppercase en el style de este input libre para mejorar el UX -->
           <input type="text" id="txt_libre_${idx}" class="td-input req-s1 text-center" style="display:none; text-transform: uppercase;" placeholder="Digite control...">
         </td>
-        <td><textarea id="prod_${idx}" class="td-input text-left read-only req-s1" readonly rows="2" style="resize:vertical; min-height:40px;"></textarea></td>
+        <td><textarea id="prod_${idx}" class="td-input text-left read-only req-s1" readonly rows="2" style="resize:vertical; min-height:40px; text-transform: uppercase;"></textarea></td>
         <td>
           <div id="guia_${idx}" style="font-size:10px; color:var(--gris); margin-bottom:5px; font-style:italic; border-bottom:1px dashed #e1e5eb; padding-bottom:3px; word-wrap:break-word;">Esperando...</div>
           <div class="limites-box">
@@ -1130,12 +1130,12 @@
           // No permitir dobles espacios
           value = value.replace(/\s\s+/g, ' ');
 
-          // Primer carácter letra y formato Oración
+          // Primer carácter letra y todo en Mayúsculas
           if (value.length > 0) {
             if (!/^[a-zA-ZáéíóúÁÉÍÓÚñÑ]/.test(value)) {
               value = '';
             } else {
-              value = value.charAt(0).toUpperCase() + value.slice(1);
+              value = value.toUpperCase(); // Forzamos todo a mayúsculas
             }
           }
           input.value = value;
