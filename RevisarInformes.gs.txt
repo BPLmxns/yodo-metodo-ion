@@ -224,12 +224,41 @@ function ejecutarLogicaEnviarSolicitudRevision(datosObj, usuario) {
     let tablaMuestrasHTML = "";
 
     controles.forEach(ctrl => {
-      let brRecord = datosBR.find(r => String(r[0]).trim() === ctrl);
-      let fechaRecepcion = brRecord ? formatDate(brRecord[1]) : "N/A"; 
-      let producto = brRecord ? String(brRecord[3]).trim() : "N/A";    
-      let identificacion = brRecord ? String(brRecord[4]).trim() : "N/A"; 
-      let espec = brRecord ? String(brRecord[6]).trim() : "N/A";       
+      // 1. Buscamos PRIMERO el historial en Resultados para conocer el Tipo y Producto digitado
+      let historicosRes = datosRes.filter(r => String(r[1]).trim() === ctrl);
+      let ultimoRes = historicosRes.length > 0 ? historicosRes[historicosRes.length - 1] : null;
+      
+      // Extraemos el tipo de muestra (columna 3 de hoja Resultados)
+      let tipoMuestra = ultimoRes ? String(ultimoRes[3]).trim().toUpperCase() : "";
 
+      // 2. Buscamos en la hoja temporal BR
+      let brRecord = datosBR.find(r => String(r[0]).trim() === ctrl);
+      
+      let fechaRecepcion, producto, identificacion, espec;
+
+      // 3. APLICAMOS TU REGLA DE NEGOCIO (Validación, Otros, o si no existe en el BR)
+      if (tipoMuestra.includes("VALIDACI") || tipoMuestra.includes("OTRO") || !brRecord) {
+        fechaRecepcion = hoyStr; // Fecha de hoy
+        producto = ultimoRes ? String(ultimoRes[4]).trim() : "N/A"; // El producto digitado en el HTML
+        identificacion = "No aplica"; // Texto por defecto
+        
+        // Reconstruimos la especificación a partir de los límites digitados
+        let limInfStr = ultimoRes ? String(ultimoRes[17]).trim() : "";
+        let limSupStr = ultimoRes ? String(ultimoRes[18]).trim() : "";
+        if (!limInfStr || limInfStr.toUpperCase().includes("NO APLICA") || limInfStr === "NA") {
+          espec = "No aplica";
+        } else {
+          espec = `[${limInfStr} - ${limSupStr}]`;
+        }
+      } else {
+        // Lógica normal (Rutina y Verificación) lo extrae del listado temporal
+        fechaRecepcion = formatDate(brRecord[1]);
+        producto = String(brRecord[3]).trim();
+        identificacion = String(brRecord[4]).trim();
+        espec = String(brRecord[6]).trim();
+      }
+
+      // --- El resto del código se mantiene intacto ---
       let historicosDup = datosDup.filter(r => String(r[1]).trim() === ctrl);
       let ultimoDup = historicosDup.length > 0 ? historicosDup[historicosDup.length - 1] : null;
       
@@ -239,9 +268,6 @@ function ejecutarLogicaEnviarSolicitudRevision(datosObj, usuario) {
       let horrat = ultimoDup ? ultimoDup[13] : "N/A";
       let confHorrat = ultimoDup ? String(ultimoDup[14]).trim() : "N/A";
 
-      let historicosRes = datosRes.filter(r => String(r[1]).trim() === ctrl);
-      let ultimoRes = historicosRes.length > 0 ? historicosRes[historicosRes.length - 1] : null;
-      
       let limInf = ultimoRes ? String(ultimoRes[17]).trim() : "No aplica"; 
       let limSup = ultimoRes ? String(ultimoRes[18]).trim() : "No aplica"; 
 
@@ -257,6 +283,7 @@ function ejecutarLogicaEnviarSolicitudRevision(datosObj, usuario) {
         }
       }
 
+      // 4. Guardamos en la hoja de Reporte (Esta es la que lee el PDF más adelante)
       const filaReporte = [
         ctrl, fechaRecepcion, producto, identificacion, hoyStr, fechaAnalisis, 
         aComa(promedio), "mg/kg", espec, conformidadRep, "OK", "", emailUsuario, "", "", ""
@@ -266,6 +293,7 @@ function ejecutarLogicaEnviarSolicitudRevision(datosObj, usuario) {
       colorear(hojaRep.getRange(lrRep, 10), conformidadRep); 
       lrRep++;
 
+      // 5. Armado de la tabla para el correo
       let registroValido = historicosDup.find(r => String(r[2]).toUpperCase().includes("RUTINA") && String(r[14]).toUpperCase().includes("CUMPLE") && !String(r[14]).toUpperCase().includes("NO CUMPLE"));
       if (!registroValido) {
         registroValido = historicosDup.reverse().find(r => String(r[2]).toUpperCase().includes("VERIFICACI") && String(r[14]).toUpperCase().includes("CUMPLE") && !String(r[14]).toUpperCase().includes("NO CUMPLE"));
